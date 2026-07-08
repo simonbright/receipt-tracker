@@ -229,9 +229,19 @@ app.post('/api/email-report', async (req, res) => {
 });
 
 if (existsSync(distPath)) {
-  app.use(express.static(distPath, { maxAge: isProduction ? '1d' : 0 }));
+  app.use(express.static(distPath, {
+    index: false,
+    maxAge: isProduction ? '1y' : 0,
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('index.html')) {
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      }
+    },
+  }));
+
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api')) return next();
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.sendFile(path.join(distPath, 'index.html'));
   });
 }

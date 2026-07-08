@@ -71,7 +71,7 @@ export default function ExpenseReport({
   const sortedCategories = Object.entries(totals.byCategory).sort(([, a], [, b]) => b - a);
 
   return (
-    <section className="card overflow-hidden sticky top-24">
+    <section className="card overflow-hidden lg:sticky lg:top-24">
       <div className="px-6 py-4 border-b border-gray-200 bg-brand-50">
         <h2 className="text-lg font-semibold text-brand-900">Expense Report</h2>
         <p className="text-xs text-brand-700 mt-0.5">{totals.count} item{totals.count !== 1 ? 's' : ''}</p>

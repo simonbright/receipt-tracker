@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Expense, ReportSettings } from '../types';
 import { computeTotals } from '../types';
+import { readStorage, writeStorage } from '../lib/storage';
 
 const EXPENSES_KEY = 'receipt-tracker-expenses';
 const SETTINGS_KEY = 'receipt-tracker-settings';
@@ -14,21 +15,12 @@ const DEFAULT_SETTINGS: ReportSettings = {
 };
 
 function loadExpenses(): Expense[] {
-  try {
-    const raw = localStorage.getItem(EXPENSES_KEY);
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+  return readStorage<Expense[]>(EXPENSES_KEY, []);
 }
 
 function loadSettings(): ReportSettings {
-  try {
-    const raw = localStorage.getItem(SETTINGS_KEY);
-    return raw ? { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } : DEFAULT_SETTINGS;
-  } catch {
-    return DEFAULT_SETTINGS;
-  }
+  const stored = readStorage<Partial<ReportSettings> | null>(SETTINGS_KEY, null);
+  return stored ? { ...DEFAULT_SETTINGS, ...stored } : DEFAULT_SETTINGS;
 }
 
 export function useExpenses() {
@@ -37,16 +29,19 @@ export function useExpenses() {
   const [serverStatus, setServerStatus] = useState<{ smtpConfigured: boolean; aiConfigured: boolean } | null>(null);
 
   useEffect(() => {
-    localStorage.setItem(EXPENSES_KEY, JSON.stringify(expenses));
+    writeStorage(EXPENSES_KEY, expenses);
   }, [expenses]);
 
   useEffect(() => {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    writeStorage(SETTINGS_KEY, settings);
   }, [settings]);
 
   useEffect(() => {
     fetch('/api/health')
-      .then((r) => r.json())
+      .then(async (r) => {
+        if (!r.ok) throw new Error('API unavailable');
+        return r.json();
+      })
       .then(setServerStatus)
       .catch(() => setServerStatus({ smtpConfigured: false, aiConfigured: false }));
   }, []);

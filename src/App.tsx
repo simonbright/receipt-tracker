@@ -5,10 +5,19 @@ import ReceiptCapture from './components/ReceiptCapture';
 import Reminders from './components/Reminders';
 import ExpenseLog from './components/ExpenseLog';
 import ExpenseReport from './components/ExpenseReport';
+import { useEffect } from 'react';
 
 export default function App() {
   const expenseState = useExpenses();
   const reminderState = useReminders();
+
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then((regs) => {
+        regs.forEach((reg) => reg.unregister());
+      });
+    }
+  }, []);
 
   return (
     <div className="min-h-screen">

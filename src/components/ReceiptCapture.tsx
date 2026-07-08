@@ -11,10 +11,17 @@ interface ReceiptCaptureProps {
 
 type Step = 'idle' | 'preview' | 'parsing' | 'review';
 
+function isMobileDevice() {
+  return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+    || (window.matchMedia('(pointer: coarse)').matches && window.innerWidth < 1024);
+}
+
 export default function ReceiptCapture({ onAddExpense, aiAvailable }: ReceiptCaptureProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const isMobile = isMobileDevice();
 
   const [step, setStep] = useState<Step>('idle');
   const [imageData, setImageData] = useState<string | null>(null);
@@ -29,6 +36,15 @@ export default function ReceiptCapture({ onAddExpense, aiAvailable }: ReceiptCap
     description: '',
   });
 
+  const stopCamera = useCallback(() => {
+    const video = videoRef.current;
+    if (video?.srcObject) {
+      (video.srcObject as MediaStream).getTracks().forEach((t) => t.stop());
+      video.srcObject = null;
+    }
+    setCameraActive(false);
+  }, []);
+
   const reset = useCallback(() => {
     setStep('idle');
     setImageData(null);
@@ -41,18 +57,14 @@ export default function ReceiptCapture({ onAddExpense, aiAvailable }: ReceiptCap
       category: 'Other',
       description: '',
     });
-  }, []);
-
-  const stopCamera = useCallback(() => {
-    const video = videoRef.current;
-    if (video?.srcObject) {
-      (video.srcObject as MediaStream).getTracks().forEach((t) => t.stop());
-      video.srcObject = null;
-    }
-    setCameraActive(false);
-  }, []);
+  }, [stopCamera]);
 
   const startCamera = async () => {
+    if (isMobile) {
+      cameraInputRef.current?.click();
+      return;
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
@@ -63,7 +75,7 @@ export default function ReceiptCapture({ onAddExpense, aiAvailable }: ReceiptCap
         setStep('preview');
       }
     } catch {
-      alert('Could not access camera. Please upload a photo instead.');
+      cameraInputRef.current?.click();
     }
   };
 
@@ -163,7 +175,7 @@ export default function ReceiptCapture({ onAddExpense, aiAvailable }: ReceiptCap
 
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={() => galleryInputRef.current?.click()}
             className="flex flex-col items-center gap-3 p-8 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 transition-colors"
           >
             <div className="w-14 h-14 bg-gray-600 rounded-full flex items-center justify-center">
@@ -171,15 +183,26 @@ export default function ReceiptCapture({ onAddExpense, aiAvailable }: ReceiptCap
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
             </div>
-            <span className="font-medium text-gray-800">Upload Image</span>
+            <span className="font-medium text-gray-800">{isMobile ? 'Choose Photo' : 'Upload Image'}</span>
             <span className="text-xs text-gray-500">JPG, PNG, or HEIC</span>
           </button>
 
           <input
-            ref={fileInputRef}
+            ref={cameraInputRef}
             type="file"
             accept="image/*"
             capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleFile(file);
+              e.target.value = '';
+            }}
+          />
+          <input
+            ref={galleryInputRef}
+            type="file"
+            accept="image/*"
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];

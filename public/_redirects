@@ -1,0 +1,3 @@
+# SPA fallback for Render Static Sites (if used by mistake).
+# Prefer deploying as a Web Service via render.yaml instead.
+/*    /index.html   200

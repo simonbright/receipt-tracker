@@ -3,21 +3,17 @@ import { v4 as uuidv4 } from 'uuid';
 import type { Reminder } from '../types';
 import { createEmptyReminder, MAX_REMINDERS } from '../types';
 import { getTimeInTimezone, shouldFireReminder } from '../lib/timezone';
+import { readStorage, writeStorage } from '../lib/storage';
 
 const REMINDERS_KEY = 'receipt-tracker-reminders';
 
 function loadReminders(): Reminder[] {
-  try {
-    const raw = localStorage.getItem(REMINDERS_KEY);
-    if (raw) {
-      const parsed: Reminder[] = JSON.parse(raw);
-      while (parsed.length < MAX_REMINDERS) {
-        parsed.push(createEmptyReminder(uuidv4()));
-      }
-      return parsed.slice(0, MAX_REMINDERS);
+  const parsed = readStorage<Reminder[] | null>(REMINDERS_KEY, null);
+  if (parsed) {
+    while (parsed.length < MAX_REMINDERS) {
+      parsed.push(createEmptyReminder(uuidv4()));
     }
-  } catch {
-    /* fall through */
+    return parsed.slice(0, MAX_REMINDERS);
   }
   return Array.from({ length: MAX_REMINDERS }, () => createEmptyReminder(uuidv4()));
 }
@@ -32,21 +28,6 @@ export interface ActiveAlert {
 
 async function showBrowserNotification(text: string) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
-
-  try {
-    const reg = await navigator.serviceWorker?.ready;
-    if (reg) {
-      await reg.showNotification('Receipt Tracker Reminder', {
-        body: text,
-        icon: '/receipt.svg',
-        badge: '/receipt.svg',
-        tag: `reminder-${Date.now()}`,
-      });
-      return;
-    }
-  } catch {
-    /* fall back to Notification API */
-  }
 
   new Notification('Receipt Tracker Reminder', {
     body: text,
@@ -67,14 +48,8 @@ export function useReminders() {
   remindersRef.current = reminders;
 
   useEffect(() => {
-    localStorage.setItem(REMINDERS_KEY, JSON.stringify(reminders));
+    writeStorage(REMINDERS_KEY, reminders);
   }, [reminders]);
-
-  useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
-    }
-  }, []);
 
   const updateReminder = useCallback((id: string, updates: Partial<Reminder>) => {
     setReminders((prev) => prev.map((r) => (r.id === id ? { ...r, ...updates } : r)));

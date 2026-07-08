@@ -90,6 +90,15 @@ Your app will be live at `https://receipt-tracker-xxxx.onrender.com`.
    - **Plan:** Starter
 3. Add env vars from `.env.example` in the **Environment** tab
 
+> **Important:** Create a **Web Service**, not a Static Site. If `/api/health` returns 404, the service type is wrong — delete it and redeploy using the blueprint.
+
+### Mobile troubleshooting
+
+- Hard-refresh or clear site data if you see a blank page after an update
+- Use **Take Photo** on iPhone/Android (opens the native camera)
+- Private browsing on iOS can block saving expenses — use a normal browser tab
+- After redeploying, wait for Render to finish building before testing on phone
+
 ### Push to GitHub
 
 ```bash
