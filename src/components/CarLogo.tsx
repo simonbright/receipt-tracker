@@ -12,7 +12,7 @@ export const CARS = [
 ] as const;
 
 export default function CarLogo() {
-  const { brandIndex, cycleBrand } = useTheme();
+  const { brandIndex, cycleBrand, darkMode } = useTheme();
   const [pop, setPop] = useState(false);
   const [showHint, setShowHint] = useState(true);
   const car = CARS[brandIndex];
@@ -36,10 +36,14 @@ export default function CarLogo() {
         onClick={handleClick}
         title={`${car.name} — tap to change theme`}
         aria-label={`${car.name} logo. Tap to change theme.`}
-        className={`w-16 h-16 rounded-2xl bg-white dark:bg-gray-800 border flex items-center justify-center p-2 shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105 active:scale-95 ${
+        className={`w-16 h-16 rounded-2xl border flex items-center justify-center p-2 transition-all duration-300 hover:scale-105 active:scale-95 ${
+          darkMode
+            ? 'bg-white border-gray-300 shadow-md shadow-black/30 hover:shadow-lg hover:shadow-black/40'
+            : 'bg-white border-gray-200 shadow-md hover:shadow-lg'
+        } ${
           showHint
-            ? 'border-brand-400 ring-4 ring-brand-300/60 ring-offset-2 dark:ring-offset-gray-900 shadow-lg shadow-brand-200/80 dark:shadow-brand-900/40 scale-105'
-            : 'border-gray-200 dark:border-gray-600'
+            ? 'border-brand-400 ring-4 ring-brand-300/60 ring-offset-2 dark:ring-offset-gray-900 shadow-lg shadow-brand-200/80 dark:shadow-brand-500/30 scale-105'
+            : ''
         } ${pop ? 'scale-110 rotate-3' : ''}`}
       >
         <img
