@@ -9,9 +9,64 @@ interface ExpenseLogProps {
   onClearAll: () => void;
 }
 
+type DraftExpense = Omit<Expense, 'id' | 'createdAt' | 'imageData'> & { imageData?: string };
+
+function toDraft(expense: Expense): DraftExpense {
+  return {
+    merchant: expense.merchant,
+    date: expense.date,
+    time: expense.time,
+    amount: expense.amount,
+    category: expense.category,
+    description: expense.description,
+  };
+}
+
 export default function ExpenseLog({ expenses, onUpdate, onDelete, onClearAll }: ExpenseLogProps) {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<DraftExpense | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+
+  const startEdit = (expense: Expense) => {
+    setEditingId(expense.id);
+    setDraft(toDraft(expense));
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setDraft(null);
+  };
+
+  const saveEdit = (id: string, original: Expense) => {
+    if (!draft || !draft.amount || draft.amount <= 0) return;
+    onUpdate(id, {
+      merchant: draft.merchant.trim(),
+      date: draft.date,
+      time: draft.time,
+      amount: draft.amount,
+      category: draft.category,
+      description: draft.description.trim(),
+      ...(draft.imageData ? { imageData: draft.imageData } : {}),
+    });
+    cancelEdit();
+  };
+
+  const handleDelete = (expense: Expense) => {
+    const label = expense.merchant || formatCurrency(expense.amount);
+    if (confirm(`Delete "${label}"? This cannot be undone.`)) {
+      if (editingId === expense.id) cancelEdit();
+      onDelete(expense.id);
+    }
+  };
+
+  const handleReplacePhoto = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const data = e.target?.result as string;
+      setDraft((prev) => (prev ? { ...prev, imageData: data } : prev));
+    };
+    reader.readAsDataURL(file);
+  };
 
   if (expenses.length === 0) {
     return (
@@ -30,31 +85,169 @@ export default function ExpenseLog({ expenses, onUpdate, onDelete, onClearAll }:
   return (
     <>
       <section className="card overflow-hidden">
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">Expense Log</h2>
+        <div className="px-4 sm:px-6 py-4 border-b border-gray-200 flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Expense Log</h2>
+            <p className="text-xs text-gray-500 mt-0.5">Tap Edit to fix a wrong entry, or Delete to remove it</p>
+          </div>
           <button
             type="button"
             onClick={() => {
-              if (confirm('Clear all expenses? This cannot be undone.')) onClearAll();
+              if (confirm('Clear all expenses? This cannot be undone.')) {
+                cancelEdit();
+                onClearAll();
+              }
             }}
-            className="text-xs text-red-600 hover:text-red-700 font-medium"
+            className="text-xs text-red-600 hover:text-red-700 font-medium flex-shrink-0"
           >
             Clear all
           </button>
         </div>
 
         <div className="divide-y divide-gray-100">
-          {expenses.map((expense) => (
-            <ExpenseRow
-              key={expense.id}
-              expense={expense}
-              expanded={expandedId === expense.id}
-              onToggle={() => setExpandedId(expandedId === expense.id ? null : expense.id)}
-              onUpdate={onUpdate}
-              onDelete={onDelete}
-              onPreviewImage={() => setPreviewImage(expense.imageData)}
-            />
-          ))}
+          {expenses.map((expense) => {
+            const isEditing = editingId === expense.id;
+            const imageSrc = isEditing && draft?.imageData ? draft.imageData : expense.imageData;
+
+            return (
+              <div key={expense.id} className="px-4 sm:px-6 py-4">
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewImage(imageSrc)}
+                    className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200 hover:ring-2 hover:ring-brand-400 transition-shadow"
+                  >
+                    <img src={imageSrc} alt="" className="w-full h-full object-cover" />
+                  </button>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-medium text-gray-900 truncate">
+                            {expense.merchant || 'Unknown merchant'}
+                          </p>
+                          <CategoryBadge category={expense.category} />
+                        </div>
+                        <p className="text-sm text-gray-500 mt-0.5">
+                          {formatDate(expense.date)}
+                          {expense.time && ` · ${expense.time}`}
+                        </p>
+                      </div>
+                      <p className="font-semibold text-gray-900 flex-shrink-0">
+                        {formatCurrency(expense.amount)}
+                      </p>
+                    </div>
+
+                    {!isEditing && (
+                      <div className="flex gap-2 mt-3">
+                        <button
+                          type="button"
+                          onClick={() => startEdit(expense)}
+                          className="btn-secondary text-xs py-1.5 px-3"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(expense)}
+                          className="btn-danger text-xs py-1.5 px-3"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {isEditing && draft && (
+                  <div className="mt-4 pt-4 border-t border-gray-100 space-y-4">
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <div className="sm:w-36 flex-shrink-0">
+                        <img
+                          src={imageSrc}
+                          alt="Receipt"
+                          className="w-full rounded-lg border border-gray-200"
+                        />
+                        <label className="btn-secondary text-xs py-1.5 px-3 mt-2 w-full cursor-pointer">
+                          Replace photo
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleReplacePhoto(file);
+                              e.target.value = '';
+                            }}
+                          />
+                        </label>
+                      </div>
+
+                      <div className="flex-1 grid sm:grid-cols-2 gap-3">
+                        <Field
+                          label="Merchant"
+                          value={draft.merchant}
+                          onChange={(v) => setDraft({ ...draft, merchant: v })}
+                        />
+                        <Field
+                          label="Amount ($)"
+                          type="number"
+                          value={String(draft.amount)}
+                          onChange={(v) => setDraft({ ...draft, amount: parseFloat(v) || 0 })}
+                        />
+                        <Field
+                          label="Date"
+                          type="date"
+                          value={draft.date}
+                          onChange={(v) => setDraft({ ...draft, date: v })}
+                        />
+                        <Field
+                          label="Time"
+                          type="time"
+                          value={draft.time}
+                          onChange={(v) => setDraft({ ...draft, time: v })}
+                        />
+                        <div>
+                          <label className="label">Category</label>
+                          <select
+                            className="input"
+                            value={draft.category}
+                            onChange={(e) =>
+                              setDraft({ ...draft, category: e.target.value as ExpenseCategory })
+                            }
+                          >
+                            {CATEGORIES.map((c) => (
+                              <option key={c} value={c}>{c}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <Field
+                          label="Description"
+                          value={draft.description}
+                          onChange={(v) => setDraft({ ...draft, description: v })}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2 justify-end">
+                      <button type="button" onClick={cancelEdit} className="btn-secondary text-sm py-2 px-4">
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => saveEdit(expense.id, expense)}
+                        disabled={!draft.amount || draft.amount <= 0}
+                        className="btn-primary text-sm py-2 px-4"
+                      >
+                        Save changes
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </section>
 
@@ -75,84 +268,11 @@ export default function ExpenseLog({ expenses, onUpdate, onDelete, onClearAll }:
   );
 }
 
-function ExpenseRow({
-  expense,
-  expanded,
-  onToggle,
-  onUpdate,
-  onDelete,
-  onPreviewImage,
-}: {
-  expense: Expense;
-  expanded: boolean;
-  onToggle: () => void;
-  onUpdate: (id: string, updates: Partial<Expense>) => void;
-  onDelete: (id: string) => void;
-  onPreviewImage: () => void;
-}) {
-  return (
-    <div className="px-6 py-4">
-      <div className="flex items-center gap-4 cursor-pointer" onClick={onToggle}>
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onPreviewImage(); }}
-          className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 border border-gray-200 hover:ring-2 hover:ring-brand-400 transition-shadow"
-        >
-          <img src={expense.imageData} alt="" className="w-full h-full object-cover" />
-        </button>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="font-medium text-gray-900 truncate">{expense.merchant || 'Unknown merchant'}</p>
-            <CategoryBadge category={expense.category} />
-          </div>
-          <p className="text-sm text-gray-500">
-            {formatDate(expense.date)}
-            {expense.time && ` · ${expense.time}`}
-          </p>
-        </div>
-
-        <div className="text-right flex-shrink-0">
-          <p className="font-semibold text-gray-900">{formatCurrency(expense.amount)}</p>
-          <svg
-            className={`w-4 h-4 text-gray-400 ml-auto mt-1 transition-transform ${expanded ? 'rotate-180' : ''}`}
-            fill="none" viewBox="0 0 24 24" stroke="currentColor"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
-        </div>
-      </div>
-
-      {expanded && (
-        <div className="mt-4 pl-16 grid sm:grid-cols-2 gap-3">
-          <Field label="Merchant" value={expense.merchant} onChange={(v) => onUpdate(expense.id, { merchant: v })} />
-          <Field label="Amount" type="number" value={String(expense.amount)} onChange={(v) => onUpdate(expense.id, { amount: parseFloat(v) || 0 })} />
-          <Field label="Date" type="date" value={expense.date} onChange={(v) => onUpdate(expense.id, { date: v })} />
-          <Field label="Time" type="time" value={expense.time} onChange={(v) => onUpdate(expense.id, { time: v })} />
-          <div>
-            <label className="label">Category</label>
-            <select
-              className="input"
-              value={expense.category}
-              onChange={(e) => onUpdate(expense.id, { category: e.target.value as ExpenseCategory })}
-            >
-              {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-          <Field label="Description" value={expense.description} onChange={(v) => onUpdate(expense.id, { description: v })} />
-          <div className="sm:col-span-2 flex justify-end">
-            <button type="button" onClick={() => onDelete(expense.id)} className="btn-danger text-xs py-1.5 px-3">
-              Remove expense
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function Field({
-  label, value, onChange, type = 'text',
+  label,
+  value,
+  onChange,
+  type = 'text',
 }: {
   label: string;
   value: string;
@@ -162,7 +282,14 @@ function Field({
   return (
     <div>
       <label className="label">{label}</label>
-      <input type={type} className="input" value={value} onChange={(e) => onChange(e.target.value)} step={type === 'number' ? '0.01' : undefined} />
+      <input
+        type={type}
+        className="input"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        step={type === 'number' ? '0.01' : undefined}
+        min={type === 'number' ? '0' : undefined}
+      />
     </div>
   );
 }

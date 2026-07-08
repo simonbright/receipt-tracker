@@ -11,13 +11,14 @@ interface ReceiptCaptureProps {
 
 type Step = 'idle' | 'preview' | 'parsing' | 'review';
 
+const GALLERY_ACCEPT = 'image/jpeg,image/png,image/heic,image/heif,image/webp,image/gif';
+
 function isMobileDevice() {
   return /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
     || (window.matchMedia('(pointer: coarse)').matches && window.innerWidth < 1024);
 }
 
 export default function ReceiptCapture({ onAddExpense, aiAvailable }: ReceiptCaptureProps) {
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -60,11 +61,6 @@ export default function ReceiptCapture({ onAddExpense, aiAvailable }: ReceiptCap
   }, [stopCamera]);
 
   const startCamera = async () => {
-    if (isMobile) {
-      cameraInputRef.current?.click();
-      return;
-    }
-
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
@@ -75,8 +71,14 @@ export default function ReceiptCapture({ onAddExpense, aiAvailable }: ReceiptCap
         setStep('preview');
       }
     } catch {
-      cameraInputRef.current?.click();
+      galleryInputRef.current?.click();
     }
+  };
+
+  const onFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) handleFile(file);
+    e.target.value = '';
   };
 
   const capturePhoto = () => {
@@ -95,13 +97,19 @@ export default function ReceiptCapture({ onAddExpense, aiAvailable }: ReceiptCap
   };
 
   const handleFile = (file: File) => {
+    setStep('parsing');
+    setParseProgress('Loading image…');
     const reader = new FileReader();
     reader.onload = (e) => {
       const data = e.target?.result as string;
+      if (!data) {
+        reset();
+        return;
+      }
       setImageData(data);
-      setStep('preview');
       runParse(data);
     };
+    reader.onerror = () => reset();
     reader.readAsDataURL(file);
   };
 
@@ -158,58 +166,82 @@ export default function ReceiptCapture({ onAddExpense, aiAvailable }: ReceiptCap
 
       {step === 'idle' && (
         <div className="grid sm:grid-cols-2 gap-4">
-          <button
-            type="button"
-            onClick={startCamera}
-            className="flex flex-col items-center gap-3 p-8 rounded-xl border-2 border-dashed border-brand-300 bg-brand-50 hover:bg-brand-100 transition-colors"
-          >
-            <div className="w-14 h-14 bg-brand-600 rounded-full flex items-center justify-center">
-              <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </div>
-            <span className="font-medium text-brand-800">Take Photo</span>
-            <span className="text-xs text-brand-600">Use your device camera</span>
-          </button>
+          {isMobile ? (
+            <>
+              <label className="flex flex-col items-center gap-3 p-8 rounded-xl border-2 border-dashed border-brand-300 bg-brand-50 hover:bg-brand-100 transition-colors cursor-pointer">
+                <div className="w-14 h-14 bg-brand-600 rounded-full flex items-center justify-center">
+                  <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+                <span className="font-medium text-brand-800">Take Photo</span>
+                <span className="text-xs text-brand-600">Opens your camera</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="sr-only"
+                  onChange={onFileInputChange}
+                />
+              </label>
 
-          <button
-            type="button"
-            onClick={() => galleryInputRef.current?.click()}
-            className="flex flex-col items-center gap-3 p-8 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 transition-colors"
-          >
-            <div className="w-14 h-14 bg-gray-600 rounded-full flex items-center justify-center">
-              <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-            </div>
-            <span className="font-medium text-gray-800">{isMobile ? 'Choose Photo' : 'Upload Image'}</span>
-            <span className="text-xs text-gray-500">JPG, PNG, or HEIC</span>
-          </button>
+              <label className="flex flex-col items-center gap-3 p-8 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer">
+                <div className="w-14 h-14 bg-gray-600 rounded-full flex items-center justify-center">
+                  <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <span className="font-medium text-gray-800">Choose Photo</span>
+                <span className="text-xs text-gray-500">From your photo library</span>
+                <input
+                  type="file"
+                  accept={GALLERY_ACCEPT}
+                  className="sr-only"
+                  onChange={onFileInputChange}
+                />
+              </label>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={startCamera}
+                className="flex flex-col items-center gap-3 p-8 rounded-xl border-2 border-dashed border-brand-300 bg-brand-50 hover:bg-brand-100 transition-colors"
+              >
+                <div className="w-14 h-14 bg-brand-600 rounded-full flex items-center justify-center">
+                  <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                  </svg>
+                </div>
+                <span className="font-medium text-brand-800">Take Photo</span>
+                <span className="text-xs text-brand-600">Use your device camera</span>
+              </button>
 
-          <input
-            ref={cameraInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleFile(file);
-              e.target.value = '';
-            }}
-          />
-          <input
-            ref={galleryInputRef}
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleFile(file);
-              e.target.value = '';
-            }}
-          />
+              <button
+                type="button"
+                onClick={() => galleryInputRef.current?.click()}
+                className="flex flex-col items-center gap-3 p-8 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 transition-colors"
+              >
+                <div className="w-14 h-14 bg-gray-600 rounded-full flex items-center justify-center">
+                  <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </div>
+                <span className="font-medium text-gray-800">Upload Image</span>
+                <span className="text-xs text-gray-500">JPG, PNG, or HEIC</span>
+              </button>
+
+              <input
+                ref={galleryInputRef}
+                type="file"
+                accept={GALLERY_ACCEPT}
+                className="hidden"
+                onChange={onFileInputChange}
+              />
+            </>
+          )}
         </div>
       )}
 
