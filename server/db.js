@@ -9,6 +9,7 @@ const jsonPath = path.join(dataDir, 'sync-data.json');
 
 let pool = null;
 let backend = null;
+let syncError = null;
 
 function readJsonStore() {
   if (!existsSync(jsonPath)) return {};
@@ -24,26 +25,66 @@ function writeJsonStore(store) {
   writeFileSync(jsonPath, `${JSON.stringify(store, null, 2)}\n`);
 }
 
+function useJsonBackend(reason) {
+  pool = null;
+  backend = 'json';
+  syncError = reason || null;
+  console.warn(`Sync database: JSON fallback${reason ? ` (${reason})` : ''}`);
+}
+
+function isValidDatabaseUrl(url) {
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (!trimmed.startsWith('postgres://') && !trimmed.startsWith('postgresql://')) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(trimmed.replace(/^postgresql:/, 'postgres:'));
+    if (!parsed.hostname) return false;
+    if (parsed.hostname === 'base' || parsed.hostname === 'localhost') {
+      // "base" is a common typo/placeholder; localhost won't work on Render.
+      return process.env.NODE_ENV !== 'production';
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export async function initDb() {
-  if (process.env.DATABASE_URL) {
-    pool = new pg.Pool({
-      connectionString: process.env.DATABASE_URL,
+  syncError = null;
+  const databaseUrl = process.env.DATABASE_URL?.trim();
+
+  if (!databaseUrl) {
+    useJsonBackend();
+    console.log('Sync database: local JSON (set DATABASE_URL on Render for persistent sync)');
+    return;
+  }
+
+  if (!isValidDatabaseUrl(databaseUrl)) {
+    useJsonBackend('DATABASE_URL looks invalid — paste the full Internal Database URL from Render');
+    return;
+  }
+
+  try {
+    const nextPool = new pg.Pool({
+      connectionString: databaseUrl,
       ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : undefined,
     });
-    await pool.query(`
+    await nextPool.query(`
       CREATE TABLE IF NOT EXISTS sync_data (
         sync_key TEXT PRIMARY KEY,
         payload JSONB NOT NULL,
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
       )
     `);
+    pool = nextPool;
     backend = 'postgres';
     console.log('Sync database: PostgreSQL');
-    return;
+  } catch (err) {
+    useJsonBackend(err.message || 'PostgreSQL connection failed');
   }
-
-  backend = 'json';
-  console.log('Sync database: local JSON (set DATABASE_URL on Render for persistent sync)');
 }
 
 export function isSyncConfigured() {
@@ -52,6 +93,10 @@ export function isSyncConfigured() {
 
 export function getSyncBackend() {
   return backend;
+}
+
+export function getSyncError() {
+  return syncError;
 }
 
 export async function getSyncRecord(syncKey) {

@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import { existsSync, readFileSync } from 'fs';
 import { setupPush, isPushConfigured } from './push.js';
 import { isAiConfigured, parseReceiptWithAi } from './ai.js';
-import { initDb, isSyncConfigured, getSyncBackend } from './db.js';
+import { initDb, isSyncConfigured, getSyncBackend, getSyncError } from './db.js';
 import { setupSync, isSyncKeyConfigured } from './sync.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -129,6 +129,7 @@ app.get('/api/health', (_req, res) => {
     pushConfigured: isPushConfigured(),
     syncConfigured: isSyncConfigured(),
     syncBackend: getSyncBackend(),
+    syncError: getSyncError(),
     syncKeyRequired: isSyncKeyConfigured(),
     deploy: deployInfo,
   });
