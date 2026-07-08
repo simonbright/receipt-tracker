@@ -5,19 +5,10 @@ import ReceiptCapture from './components/ReceiptCapture';
 import Reminders from './components/Reminders';
 import ExpenseLog from './components/ExpenseLog';
 import ExpenseReport from './components/ExpenseReport';
-import { useEffect } from 'react';
 
 export default function App() {
   const expenseState = useExpenses();
   const reminderState = useReminders();
-
-  useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then((regs) => {
-        regs.forEach((reg) => reg.unregister());
-      });
-    }
-  }, []);
 
   return (
     <div className="min-h-screen">
@@ -32,11 +23,13 @@ export default function App() {
         <Reminders
           reminders={reminderState.reminders}
           onUpdate={reminderState.updateReminder}
-          activeAlerts={reminderState.activeAlerts}
-          onDismissAlert={reminderState.dismissAlert}
           notificationPermission={reminderState.notificationPermission}
           onRequestPermission={reminderState.requestNotificationPermission}
           enabledCount={reminderState.enabledCount}
+          pushEnabled={reminderState.pushEnabled}
+          pushError={reminderState.pushError}
+          pushConfigured={reminderState.pushConfigured}
+          needsHomeScreen={reminderState.needsHomeScreen}
         />
 
         <div className="grid lg:grid-cols-5 gap-8">

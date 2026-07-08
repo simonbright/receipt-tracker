@@ -1,0 +1,17 @@
+{
+  "name": "Receipt Tracker",
+  "short_name": "Receipts",
+  "description": "Capture receipts and track expenses",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#16a34a",
+  "icons": [
+    {
+      "src": "/receipt.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

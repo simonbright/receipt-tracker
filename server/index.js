@@ -7,6 +7,7 @@ import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync } from 'fs';
+import { setupPush, isPushConfigured } from './push.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distPath = path.join(__dirname, '..', 'dist');
@@ -108,8 +109,11 @@ app.get('/api/health', (_req, res) => {
     ok: true,
     smtpConfigured: Boolean(getTransporter()),
     aiConfigured: Boolean(process.env.OPENAI_API_KEY),
+    pushConfigured: isPushConfigured(),
   });
 });
+
+setupPush(app);
 
 app.post('/api/parse-receipt', upload.single('image'), async (req, res) => {
   try {

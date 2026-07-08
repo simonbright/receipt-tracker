@@ -1,11 +1,17 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import type { Reminder } from '../types';
 import { createEmptyReminder, MAX_REMINDERS } from '../types';
-import { getTimeInTimezone, shouldFireReminder } from '../lib/timezone';
 import { readStorage, writeStorage } from '../lib/storage';
+import {
+  isIOS,
+  isStandaloneApp,
+  subscribeToPush,
+  syncRemindersToServer,
+} from '../lib/pushNotifications';
 
 const REMINDERS_KEY = 'receipt-tracker-reminders';
+const PUSH_ENABLED_KEY = 'receipt-tracker-push-enabled';
 
 function loadReminders(): Reminder[] {
   const parsed = readStorage<Reminder[] | null>(REMINDERS_KEY, null);
@@ -20,89 +26,79 @@ function loadReminders(): Reminder[] {
 
 export type NotificationPermission = 'default' | 'granted' | 'denied' | 'unsupported';
 
-export interface ActiveAlert {
-  id: string;
-  text: string;
-  firedAt: string;
-}
-
-async function showBrowserNotification(text: string) {
-  if (!('Notification' in window) || Notification.permission !== 'granted') return;
-
-  new Notification('Receipt Tracker Reminder', {
-    body: text,
-    icon: '/receipt.svg',
-    tag: 'receipt-reminder',
-  });
-}
-
 export function useReminders() {
   const [reminders, setReminders] = useState<Reminder[]>(loadReminders);
-  const [activeAlerts, setActiveAlerts] = useState<ActiveAlert[]>([]);
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(() => {
     if (!('Notification' in window)) return 'unsupported';
     return Notification.permission as NotificationPermission;
   });
-
-  const remindersRef = useRef(reminders);
-  remindersRef.current = reminders;
+  const [pushEnabled, setPushEnabled] = useState(() => readStorage(PUSH_ENABLED_KEY, false));
+  const [pushError, setPushError] = useState<string | null>(null);
+  const [pushConfigured, setPushConfigured] = useState<boolean | null>(null);
 
   useEffect(() => {
     writeStorage(REMINDERS_KEY, reminders);
   }, [reminders]);
 
+  useEffect(() => {
+    fetch('/api/health')
+      .then((r) => r.json())
+      .then((data) => setPushConfigured(data.pushConfigured ?? false))
+      .catch(() => setPushConfigured(false));
+  }, []);
+
+  useEffect(() => {
+    if (!pushEnabled || notificationPermission !== 'granted') return;
+    syncRemindersToServer(reminders).catch(() => {
+      /* server may be unavailable briefly */
+    });
+  }, [reminders, pushEnabled, notificationPermission]);
+
+  useEffect(() => {
+    if (notificationPermission !== 'granted' || !readStorage(PUSH_ENABLED_KEY, false)) return;
+    syncRemindersToServer(loadReminders()).catch(() => {});
+  }, [notificationPermission]);
+
   const updateReminder = useCallback((id: string, updates: Partial<Reminder>) => {
     setReminders((prev) => prev.map((r) => (r.id === id ? { ...r, ...updates } : r)));
   }, []);
 
-  const dismissAlert = useCallback((id: string) => {
-    setActiveAlerts((prev) => prev.filter((a) => a.id !== id));
-  }, []);
-
   const requestNotificationPermission = useCallback(async () => {
-    if (!('Notification' in window)) return false;
-    const result = await Notification.requestPermission();
-    setNotificationPermission(result as NotificationPermission);
-    return result === 'granted';
-  }, []);
+    setPushError(null);
 
-  const markFired = useCallback((id: string, dateKey: string) => {
-    setReminders((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, lastFiredDate: dateKey } : r))
-    );
-  }, []);
+    if (isIOS() && !isStandaloneApp()) {
+      setPushError('On iPhone, add this app to your Home Screen first, then enable notifications.');
+      return false;
+    }
 
-  useEffect(() => {
-    const checkReminders = () => {
-      const current = remindersRef.current;
-
-      for (const reminder of current) {
-        const now = getTimeInTimezone(reminder.timezone);
-        if (!shouldFireReminder(reminder, now)) continue;
-
-        markFired(reminder.id, now.dateKey);
-        showBrowserNotification(reminder.text);
-        setActiveAlerts((prev) => [
-          ...prev,
-          { id: `${reminder.id}-${now.dateKey}`, text: reminder.text, firedAt: new Date().toISOString() },
-        ]);
+    try {
+      const ok = await subscribeToPush(reminders);
+      if (ok) {
+        setNotificationPermission('granted');
+        setPushEnabled(true);
+        writeStorage(PUSH_ENABLED_KEY, true);
+      } else {
+        setNotificationPermission(Notification.permission as NotificationPermission);
       }
-    };
-
-    checkReminders();
-    const interval = setInterval(checkReminders, 15_000);
-    return () => clearInterval(interval);
-  }, [markFired]);
+      return ok;
+    } catch (err) {
+      setPushError(err instanceof Error ? err.message : 'Failed to enable notifications');
+      return false;
+    }
+  }, [reminders]);
 
   const enabledCount = reminders.filter((r) => r.enabled && r.text.trim()).length;
+  const needsHomeScreen = isIOS() && !isStandaloneApp();
 
   return {
     reminders,
     updateReminder,
-    activeAlerts,
-    dismissAlert,
     notificationPermission,
     requestNotificationPermission,
     enabledCount,
+    pushEnabled,
+    pushError,
+    pushConfigured,
+    needsHomeScreen,
   };
 }

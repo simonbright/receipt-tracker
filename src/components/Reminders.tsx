@@ -1,51 +1,33 @@
 import type { Reminder } from '../types';
 import { TIMEZONE_OPTIONS, MAX_REMINDERS } from '../types';
 import { formatTime12h, getTimezoneAbbrev, getTimeInTimezone, getNextReminderLabel } from '../lib/timezone';
-import type { ActiveAlert, NotificationPermission } from '../hooks/useReminders';
+import type { NotificationPermission } from '../hooks/useReminders';
 
 interface RemindersProps {
   reminders: Reminder[];
   onUpdate: (id: string, updates: Partial<Reminder>) => void;
-  activeAlerts: ActiveAlert[];
-  onDismissAlert: (id: string) => void;
   notificationPermission: NotificationPermission;
   onRequestPermission: () => Promise<boolean>;
   enabledCount: number;
+  pushEnabled: boolean;
+  pushError: string | null;
+  pushConfigured: boolean | null;
+  needsHomeScreen: boolean;
 }
 
 export default function Reminders({
   reminders,
   onUpdate,
-  activeAlerts,
-  onDismissAlert,
   notificationPermission,
   onRequestPermission,
   enabledCount,
+  pushEnabled,
+  pushError,
+  pushConfigured,
+  needsHomeScreen,
 }: RemindersProps) {
   return (
     <section className="card overflow-hidden">
-      {activeAlerts.map((alert) => (
-        <div
-          key={alert.id}
-          className="px-4 py-3 bg-brand-600 text-white flex items-start gap-3 animate-pulse"
-        >
-          <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-          </svg>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-sm">Reminder</p>
-            <p className="text-sm text-brand-100">{alert.text}</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => onDismissAlert(alert.id)}
-            className="text-brand-200 hover:text-white text-xs font-medium flex-shrink-0"
-          >
-            Dismiss
-          </button>
-        </div>
-      ))}
-
       <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">Daily Reminders</h2>
@@ -53,17 +35,39 @@ export default function Reminders({
             Up to {MAX_REMINDERS} reminders per day · {enabledCount} active
           </p>
         </div>
-        {notificationPermission !== 'granted' && notificationPermission !== 'unsupported' && (
-          <button type="button" onClick={onRequestPermission} className="btn-primary text-xs py-2 px-3">
-            Enable notifications
-          </button>
-        )}
-        {notificationPermission === 'granted' && (
+        {pushEnabled && notificationPermission === 'granted' ? (
           <span className="text-xs text-brand-700 bg-brand-50 px-2.5 py-1 rounded-full font-medium">
-            Notifications on
+            Phone alerts on
           </span>
-        )}
+        ) : notificationPermission !== 'unsupported' && !needsHomeScreen ? (
+          <button type="button" onClick={onRequestPermission} className="btn-primary text-xs py-2 px-3">
+            Enable phone alerts
+          </button>
+        ) : null}
       </div>
+
+      {needsHomeScreen && (
+        <div className="px-6 py-3 bg-amber-50 border-b border-amber-100">
+          <p className="text-sm font-medium text-amber-900">iPhone setup required</p>
+          <p className="text-xs text-amber-800 mt-1">
+            Tap the Share button in Safari, then <strong>Add to Home Screen</strong>. Open the app from your home screen, then tap <strong>Enable phone alerts</strong>.
+          </p>
+        </div>
+      )}
+
+      {pushConfigured === false && (
+        <div className="px-6 py-3 bg-gray-50 border-b border-gray-100">
+          <p className="text-xs text-gray-600">
+            Server push is not configured yet. Add VAPID keys in Render to receive alerts when the app is closed.
+          </p>
+        </div>
+      )}
+
+      {pushError && (
+        <div className="px-6 py-3 bg-red-50 border-b border-red-100">
+          <p className="text-xs text-red-700">{pushError}</p>
+        </div>
+      )}
 
       <div className="divide-y divide-gray-100">
         {reminders.map((reminder, index) => (
@@ -78,9 +82,9 @@ export default function Reminders({
 
       <div className="px-6 py-3 bg-gray-50 border-t border-gray-100">
         <p className="text-xs text-gray-500">
-          Reminders fire as browser notifications while this app is open.
+          Reminders are sent as phone notifications — even when the app is closed.
           {notificationPermission === 'denied' && (
-            <span className="text-amber-700"> Notifications are blocked — enable them in your browser settings.</span>
+            <span className="text-amber-700"> Notifications are blocked in your browser settings.</span>
           )}
         </p>
       </div>
