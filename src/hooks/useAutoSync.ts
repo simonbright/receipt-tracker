@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Expense, Reminder, ReportSettings } from '../types';
 import {
+  clearPendingSync,
   fetchRemoteSync,
   getLocalSyncAt,
+  hasPendingSync,
+  isBrowserOnline,
   isRemoteNewer,
+  markPendingSync,
   pushRemoteSync,
   setLocalSyncAt,
   type SyncPayload,
@@ -15,7 +19,7 @@ interface UseAutoSyncOptions {
   settings: ReportSettings;
   reminders: Reminder[];
   pushEnabled: boolean;
-  syncAvailable: boolean;
+  syncEnabled: boolean;
   onApplyRemote: (payload: SyncPayload) => void;
 }
 
@@ -26,13 +30,17 @@ export function useAutoSync({
   settings,
   reminders,
   pushEnabled,
-  syncAvailable,
+  syncEnabled,
   onApplyRemote,
 }: UseAutoSyncOptions) {
-  const [syncStatus, setSyncStatus] = useState<SyncStatus>('loading');
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(() => {
+    if (!isBrowserOnline()) return hasPendingSync() ? 'pending' : 'offline';
+    return 'loading';
+  });
   const applyingRemote = useRef(false);
   const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const initialPullDone = useRef(false);
+  const syncing = useRef(false);
 
   const buildPayload = useCallback((): SyncPayload => {
     return {
@@ -54,16 +62,71 @@ export function useAutoSync({
     [onApplyRemote]
   );
 
-  const pullFromServer = useCallback(async () => {
-    if (!syncAvailable) {
+  const pushToServer = useCallback(async () => {
+    if (!syncEnabled || applyingRemote.current || syncing.current) return false;
+
+    if (!isBrowserOnline()) {
+      markPendingSync();
       setSyncStatus('offline');
+      return false;
+    }
+
+    syncing.current = true;
+    const payload = buildPayload();
+    setSyncStatus('syncing');
+
+    const result = await pushRemoteSync(payload);
+    syncing.current = false;
+
+    if (result === 'ok') {
+      setSyncStatus('synced');
+      return true;
+    }
+
+    if (result === 'offline') {
+      setSyncStatus(hasPendingSync() ? 'pending' : 'offline');
+      return false;
+    }
+
+    if (result === 'conflict') {
+      const remote = await fetchRemoteSync();
+      const localAt = payload.updatedAt;
+      if (remote?.payload && isRemoteNewer(remote.updatedAt, localAt)) {
+        applyRemote(remote.payload);
+        clearPendingSync();
+        setSyncStatus('synced');
+        return true;
+      }
+      const retry = await pushRemoteSync({ ...payload, updatedAt: new Date().toISOString() });
+      setSyncStatus(retry === 'ok' ? 'synced' : retry === 'offline' ? 'pending' : 'error');
+      return retry === 'ok';
+    }
+
+    setSyncStatus('error');
+    return false;
+  }, [syncEnabled, buildPayload, applyRemote]);
+
+  const pullFromServer = useCallback(async () => {
+    if (!syncEnabled) {
+      setSyncStatus(isBrowserOnline() ? 'idle' : hasPendingSync() ? 'pending' : 'offline');
+      return;
+    }
+
+    if (!isBrowserOnline()) {
+      setSyncStatus(hasPendingSync() ? 'pending' : 'offline');
+      return;
+    }
+
+    if (hasPendingSync()) {
+      await pushToServer();
       return;
     }
 
     setSyncStatus('syncing');
     const remote = await fetchRemoteSync();
+
     if (!remote) {
-      setSyncStatus('offline');
+      setSyncStatus(hasPendingSync() ? 'pending' : 'offline');
       return;
     }
 
@@ -76,62 +139,73 @@ export function useAutoSync({
     }
 
     if (!remote.payload) {
-      const payload = buildPayload();
-      setLocalSyncAt(payload.updatedAt);
-      const result = await pushRemoteSync(payload);
-      setSyncStatus(result === 'error' ? 'error' : 'synced');
+      await pushToServer();
       return;
     }
 
     setSyncStatus('synced');
-  }, [syncAvailable, applyRemote, buildPayload]);
+  }, [syncEnabled, applyRemote, pushToServer]);
 
-  const pushToServer = useCallback(async () => {
-    if (!syncAvailable || applyingRemote.current) return;
+  const syncNow = useCallback(async () => {
+    if (!syncEnabled) return;
+    await pullFromServer();
+  }, [syncEnabled, pullFromServer]);
 
-    const payload = buildPayload();
-    setLocalSyncAt(payload.updatedAt);
-    setSyncStatus('syncing');
-
-    const result = await pushRemoteSync(payload);
-    if (result === 'conflict') {
-      const remote = await fetchRemoteSync();
-      if (remote?.payload) applyRemote(remote.payload);
-      setSyncStatus('synced');
+  useEffect(() => {
+    if (!syncEnabled) {
+      initialPullDone.current = true;
+      setSyncStatus('idle');
       return;
     }
 
-    setSyncStatus(result === 'error' ? 'error' : 'synced');
-  }, [syncAvailable, buildPayload, applyRemote]);
-
-  useEffect(() => {
-    if (!syncAvailable || initialPullDone.current) return;
+    if (initialPullDone.current) return;
     initialPullDone.current = true;
     pullFromServer();
-  }, [syncAvailable, pullFromServer]);
+  }, [syncEnabled, pullFromServer]);
 
   useEffect(() => {
-    if (!syncAvailable || !initialPullDone.current || applyingRemote.current) return;
+    if (!syncEnabled || !initialPullDone.current || applyingRemote.current) return;
+
+    if (!isBrowserOnline()) {
+      markPendingSync();
+      setSyncStatus('pending');
+      return;
+    }
 
     if (pushTimer.current) clearTimeout(pushTimer.current);
     pushTimer.current = setTimeout(() => {
+      markPendingSync();
+      setSyncStatus('pending');
       pushToServer();
     }, PUSH_DELAY_MS);
 
     return () => {
       if (pushTimer.current) clearTimeout(pushTimer.current);
     };
-  }, [expenses, settings, reminders, pushEnabled, syncAvailable, pushToServer]);
+  }, [expenses, settings, reminders, pushEnabled, syncEnabled, pushToServer]);
 
   useEffect(() => {
-    if (!syncAvailable) return;
-
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') pullFromServer();
+    const onOnline = () => {
+      syncNow();
     };
+    const onOffline = () => {
+      setSyncStatus(hasPendingSync() ? 'pending' : 'offline');
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && isBrowserOnline()) {
+        syncNow();
+      }
+    };
+
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
     document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [syncAvailable, pullFromServer]);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [syncNow]);
 
   return { syncStatus };
 }

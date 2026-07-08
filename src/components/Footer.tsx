@@ -17,7 +17,9 @@ function syncLabel(status: SyncStatus) {
     case 'synced':
       return 'Synced';
     case 'offline':
-      return 'Offline';
+      return 'Offline · saved locally';
+    case 'pending':
+      return 'Pending sync';
     case 'error':
       return 'Sync error';
     default:
@@ -45,7 +47,9 @@ export default function Footer({ syncStatus, syncEnabled }: FooterProps) {
                   ? 'text-red-500'
                   : syncStatus === 'synced'
                     ? 'text-brand-700 dark:text-brand-400'
-                    : undefined
+                    : syncStatus === 'pending' || syncStatus === 'offline'
+                      ? 'text-amber-600 dark:text-amber-400'
+                      : undefined
               }
             >
               {syncLabel(syncStatus)}

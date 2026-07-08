@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { useExpenses } from './hooks/useExpenses';
 import { useReminders } from './hooks/useReminders';
 import { useAutoSync } from './hooks/useAutoSync';
+import { hasPendingSync } from './lib/syncClient';
 import type { SyncPayload } from './lib/syncClient';
 import Header from './components/Header';
 import Footer from './components/Footer';
@@ -28,12 +29,15 @@ export default function App() {
     [expenseState.hydrateFromSync, reminderState.hydrateFromSync]
   );
 
+  const syncEnabled =
+    (expenseState.serverStatus?.syncConfigured ?? false) || hasPendingSync();
+
   const { syncStatus } = useAutoSync({
     expenses: expenseState.expenses,
     settings: expenseState.settings,
     reminders: reminderState.reminders,
     pushEnabled: reminderState.pushEnabled,
-    syncAvailable: expenseState.serverStatus?.syncConfigured ?? false,
+    syncEnabled,
     onApplyRemote,
   });
 
@@ -78,7 +82,7 @@ export default function App() {
         </div>
       </main>
 
-      <Footer syncStatus={syncStatus} syncEnabled={expenseState.serverStatus?.syncConfigured ?? false} />
+      <Footer syncStatus={syncStatus} syncEnabled={syncEnabled} />
     </div>
   );
 }

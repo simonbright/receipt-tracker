@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import type { Expense, ReportSettings } from '../types';
 import { computeTotals, defaultReportDateRange, normalizeExpense } from '../types';
 import { readStorage, writeStorage } from '../lib/storage';
+import { fetchHealth, getCachedHealth, isBrowserOnline } from '../lib/syncClient';
 
 const EXPENSES_KEY = 'receipt-tracker-expenses';
 const SETTINGS_KEY = 'receipt-tracker-settings';
@@ -33,10 +34,30 @@ function loadSettings(expenses: Expense[]): ReportSettings {
   };
 }
 
+function initialServerStatus() {
+  const cached = getCachedHealth();
+  if (cached) {
+    return { aiConfigured: cached.aiConfigured, syncConfigured: cached.syncConfigured };
+  }
+  return { aiConfigured: false, syncConfigured: false };
+}
+
 export function useExpenses() {
   const [expenses, setExpenses] = useState<Expense[]>(loadExpenses);
   const [settings, setSettings] = useState<ReportSettings>(() => loadSettings(loadExpenses()));
-  const [serverStatus, setServerStatus] = useState<{ aiConfigured: boolean; syncConfigured: boolean } | null>(null);
+  const [serverStatus, setServerStatus] = useState<{ aiConfigured: boolean; syncConfigured: boolean } | null>(
+    initialServerStatus
+  );
+
+  const refreshHealth = useCallback(async () => {
+    const health = await fetchHealth();
+    if (health) {
+      setServerStatus({
+        aiConfigured: health.aiConfigured,
+        syncConfigured: health.syncConfigured,
+      });
+    }
+  }, []);
 
   useEffect(() => {
     writeStorage(EXPENSES_KEY, expenses);
@@ -47,19 +68,14 @@ export function useExpenses() {
   }, [settings]);
 
   useEffect(() => {
-    fetch('/api/health')
-      .then(async (r) => {
-        if (!r.ok) throw new Error('API unavailable');
-        return r.json();
-      })
-      .then((data) =>
-        setServerStatus({
-          aiConfigured: data.aiConfigured,
-          syncConfigured: data.syncConfigured ?? false,
-        })
-      )
-      .catch(() => setServerStatus({ aiConfigured: false, syncConfigured: false }));
-  }, []);
+    refreshHealth();
+  }, [refreshHealth]);
+
+  useEffect(() => {
+    const onOnline = () => refreshHealth();
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+  }, [refreshHealth]);
 
   const addExpense = useCallback((expense: Expense) => {
     setExpenses((prev) => [expense, ...prev]);
@@ -83,6 +99,7 @@ export function useExpenses() {
   }, []);
 
   const totals = computeTotals(expenses);
+  const offline = !isBrowserOnline();
 
   return {
     expenses,
@@ -95,5 +112,6 @@ export function useExpenses() {
     hydrateFromSync,
     totals,
     serverStatus,
+    offline,
   };
 }
