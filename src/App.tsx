@@ -70,6 +70,9 @@ export default function App() {
               onUpdate={expenseState.updateExpense}
               onDelete={expenseState.deleteExpense}
               onClearAll={expenseState.clearAll}
+              onLoadSamples={
+                import.meta.env.DEV ? expenseState.loadSampleExpenses : undefined
+              }
             />
           </div>
           <div className="lg:col-span-2">

@@ -1,10 +1,14 @@
-import { useState, useMemo } from 'react';
-import type { Expense, ReportSettings } from '../types';
+import { useMemo, useState } from 'react';
+import type { Expense, LineItemType, ReportSettings } from '../types';
 import {
+  LINE_ITEMS,
   computeTotals,
-  filterExpensesByDateRange,
+  filterExpensesForReport,
   formatCurrency,
   formatDate,
+  isAllLineItemsSelected,
+  isNoneLineItemsSelected,
+  normalizeSelectedLineItems,
 } from '../types';
 import { exportExpenseReportPdf } from '../lib/exportPdf';
 
@@ -25,11 +29,17 @@ export default function ExpenseReport({
 
   const dateFrom = settings.dateFrom;
   const dateTo = settings.dateTo;
+  const selectedLineItems = useMemo(
+    () => normalizeSelectedLineItems(settings.lineItems),
+    [settings.lineItems]
+  );
+  const allLineItemsSelected = isAllLineItemsSelected(selectedLineItems);
+  const noneLineItemsSelected = isNoneLineItemsSelected(selectedLineItems);
   const rangeInvalid = Boolean(dateFrom && dateTo && dateFrom > dateTo);
 
   const filteredExpenses = useMemo(
-    () => filterExpensesByDateRange(expenses, dateFrom, dateTo),
-    [expenses, dateFrom, dateTo]
+    () => filterExpensesForReport(expenses, dateFrom, dateTo, selectedLineItems),
+    [expenses, dateFrom, dateTo, selectedLineItems]
   );
 
   const totals = useMemo(() => computeTotals(filteredExpenses), [filteredExpenses]);
@@ -39,13 +49,40 @@ export default function ExpenseReport({
     onSettingsChange({ ...settings, [field]: value });
   };
 
+  const setLineItems = (lineItems: LineItemType[]) => {
+    onSettingsChange({
+      ...settings,
+      lineItems: normalizeSelectedLineItems(lineItems),
+    });
+  };
+
+  const toggleLineItem = (item: LineItemType) => {
+    if (selectedLineItems.includes(item)) {
+      setLineItems(selectedLineItems.filter((v) => v !== item));
+      return;
+    }
+    setLineItems([...selectedLineItems, item]);
+  };
+
+  const selectAllLineItems = () => setLineItems([...LINE_ITEMS]);
+  const deselectAllLineItems = () => setLineItems([]);
+
   const handleExportPdf = async () => {
     if (rangeInvalid) {
       setExportStatus({ type: 'error', message: 'From date must be on or before To date.' });
       return;
     }
+    if (noneLineItemsSelected) {
+      setExportStatus({ type: 'error', message: 'Select at least one line item for the report.' });
+      return;
+    }
     if (filteredExpenses.length === 0) {
-      setExportStatus({ type: 'error', message: 'No expenses in the selected date range.' });
+      setExportStatus({
+        type: 'error',
+        message: allLineItemsSelected
+          ? 'No expenses in the selected date range.'
+          : 'No expenses match the selected date range and line items.',
+      });
       return;
     }
 
@@ -56,7 +93,7 @@ export default function ExpenseReport({
       await exportExpenseReportPdf({
         expenses: filteredExpenses,
         totals,
-        settings,
+        settings: { ...settings, lineItems: selectedLineItems },
         dateFrom,
         dateTo,
       });
@@ -71,12 +108,20 @@ export default function ExpenseReport({
     }
   };
 
+  const filterSummary = noneLineItemsSelected
+    ? 'None selected'
+    : allLineItemsSelected
+      ? 'All line items'
+      : selectedLineItems.length === 1
+        ? selectedLineItems[0]
+        : `${selectedLineItems.length} line items`;
+
   return (
     <section className="card overflow-hidden lg:sticky lg:top-24">
       <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-brand-50 dark:bg-brand-950">
         <h2 className="text-lg font-semibold text-brand-900 dark:text-brand-100">Expense Report</h2>
         <p className="text-xs text-brand-700 dark:text-brand-300 mt-0.5">
-          {totals.count} item{totals.count !== 1 ? 's' : ''} in selected range
+          {totals.count} item{totals.count !== 1 ? 's' : ''} in selected filters
         </p>
       </div>
 
@@ -100,6 +145,55 @@ export default function ExpenseReport({
               onChange={(e) => update('dateTo', e.target.value)}
             />
           </div>
+        </div>
+
+        <div>
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <label className="label mb-0">Line items</label>
+            <div className="flex items-center gap-3">
+              {!allLineItemsSelected && (
+                <button
+                  type="button"
+                  onClick={selectAllLineItems}
+                  className="text-xs font-medium text-brand-700 hover:text-brand-800"
+                >
+                  Select all
+                </button>
+              )}
+              {!noneLineItemsSelected && (
+                <button
+                  type="button"
+                  onClick={deselectAllLineItems}
+                  className="text-xs font-medium text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                >
+                  Deselect all
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {LINE_ITEMS.map((item) => {
+              const active = selectedLineItems.includes(item);
+              return (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => toggleLineItem(item)}
+                  aria-pressed={active}
+                  className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${
+                    active
+                      ? 'bg-brand-600 text-white border-brand-600'
+                      : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-brand-300'
+                  }`}
+                >
+                  {item}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+            Report and PDF include: {filterSummary}
+          </p>
         </div>
 
         {rangeInvalid && (
@@ -164,7 +258,11 @@ export default function ExpenseReport({
         )}
 
         {filteredExpenses.length === 0 && expenses.length > 0 && !rangeInvalid && (
-          <p className="text-sm text-gray-500 text-center py-2">No expenses in this date range.</p>
+          <p className="text-sm text-gray-500 text-center py-2">
+            {noneLineItemsSelected
+              ? 'Select at least one line item to build a report.'
+              : 'No expenses match the selected date range and line items.'}
+          </p>
         )}
 
         <div className="border-t border-gray-200 pt-4 space-y-3">
@@ -220,7 +318,7 @@ export default function ExpenseReport({
           </button>
 
           <p className="text-xs text-gray-500">
-            PDF includes the summary, line-item breakdown, and receipt images keyed by Ref (R1, R2, …), with page numbers.
+            PDF includes only the selected line items, with receipt images keyed by Ref (R1, R2, …) and page numbers.
           </p>
 
           {exportStatus && (

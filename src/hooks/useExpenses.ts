@@ -1,8 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Expense, ReportSettings } from '../types';
-import { computeTotals, defaultReportDateRange, normalizeExpense } from '../types';
+import {
+  computeTotals,
+  defaultReportDateRange,
+  normalizeExpense,
+  normalizeSelectedLineItems,
+} from '../types';
 import { readStorage, writeStorage } from '../lib/storage';
 import { fetchHealth, getCachedHealth, isBrowserOnline } from '../lib/syncClient';
+import { createSampleExpenses } from '../lib/sampleReceipts';
 
 const EXPENSES_KEY = 'receipt-tracker-expenses';
 const SETTINGS_KEY = 'receipt-tracker-settings';
@@ -15,6 +21,7 @@ function buildDefaultSettings(expenses: Expense[]): ReportSettings {
     notes: '',
     dateFrom,
     dateTo,
+    lineItems: normalizeSelectedLineItems(null),
   };
 }
 
@@ -31,6 +38,7 @@ function loadSettings(expenses: Expense[]): ReportSettings {
     ...stored,
     dateFrom: stored.dateFrom || defaults.dateFrom,
     dateTo: stored.dateTo || defaults.dateTo,
+    lineItems: normalizeSelectedLineItems(stored.lineItems),
   };
 }
 
@@ -93,9 +101,29 @@ export function useExpenses() {
     setExpenses([]);
   }, []);
 
+  const loadSampleExpenses = useCallback(() => {
+    const samples = createSampleExpenses();
+    setExpenses((prev) => {
+      const next = [...samples, ...prev];
+      const range = defaultReportDateRange(next);
+      setSettings((settings) => ({
+        ...settings,
+        dateFrom: range.dateFrom,
+        dateTo: range.dateTo,
+      }));
+      return next;
+    });
+  }, []);
+
   const hydrateFromSync = useCallback((data: { expenses: Expense[]; settings: ReportSettings }) => {
     setExpenses(data.expenses.map(normalizeExpense));
-    setSettings(data.settings);
+    setSettings({
+      ...buildDefaultSettings(data.expenses),
+      ...data.settings,
+      dateFrom: data.settings.dateFrom || defaultReportDateRange(data.expenses).dateFrom,
+      dateTo: data.settings.dateTo || defaultReportDateRange(data.expenses).dateTo,
+      lineItems: normalizeSelectedLineItems(data.settings.lineItems),
+    });
   }, []);
 
   const totals = computeTotals(expenses);
@@ -109,6 +137,7 @@ export function useExpenses() {
     updateExpense,
     deleteExpense,
     clearAll,
+    loadSampleExpenses,
     hydrateFromSync,
     totals,
     serverStatus,

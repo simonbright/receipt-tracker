@@ -1,12 +1,22 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { Expense, LineItemType } from '../types';
-import { LINE_ITEMS, formatCurrency, formatDate, lineItemToCategory } from '../types';
+import {
+  LINE_ITEMS,
+  filterExpensesByLineItems,
+  formatCurrency,
+  formatDate,
+  isAllLineItemsSelected,
+  isNoneLineItemsSelected,
+  lineItemToCategory,
+  normalizeSelectedLineItems,
+} from '../types';
 
 interface ExpenseLogProps {
   expenses: Expense[];
   onUpdate: (id: string, updates: Partial<Expense>) => void;
   onDelete: (id: string) => void;
   onClearAll: () => void;
+  onLoadSamples?: () => void;
 }
 
 type DraftExpense = Omit<Expense, 'id' | 'createdAt' | 'imageData'> & { imageData?: string };
@@ -23,10 +33,36 @@ function toDraft(expense: Expense): DraftExpense {
   };
 }
 
-export default function ExpenseLog({ expenses, onUpdate, onDelete, onClearAll }: ExpenseLogProps) {
+export default function ExpenseLog({
+  expenses,
+  onUpdate,
+  onDelete,
+  onClearAll,
+  onLoadSamples,
+}: ExpenseLogProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftExpense | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [selectedLineItems, setSelectedLineItems] = useState<LineItemType[]>(() =>
+    normalizeSelectedLineItems(null)
+  );
+
+  const allSelected = isAllLineItemsSelected(selectedLineItems);
+  const noneSelected = isNoneLineItemsSelected(selectedLineItems);
+  const filteredExpenses = useMemo(
+    () => filterExpensesByLineItems(expenses, selectedLineItems),
+    [expenses, selectedLineItems]
+  );
+
+  const toggleLineItem = (item: LineItemType) => {
+    setSelectedLineItems((prev) => {
+      const current = normalizeSelectedLineItems(prev);
+      if (current.includes(item)) {
+        return current.filter((v) => v !== item);
+      }
+      return [...current, item];
+    });
+  };
 
   const startEdit = (expense: Expense) => {
     setEditingId(expense.id);
@@ -80,6 +116,11 @@ export default function ExpenseLog({ expenses, onUpdate, onDelete, onClearAll }:
         </div>
         <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">No expenses yet</h2>
         <p className="text-sm text-gray-500 dark:text-gray-400">Add your first receipt above to start building your expense report.</p>
+        {onLoadSamples && (
+          <button type="button" onClick={onLoadSamples} className="btn-secondary mt-4 text-sm">
+            Load 3 sample receipts
+          </button>
+        )}
       </section>
     );
   }
@@ -90,24 +131,94 @@ export default function ExpenseLog({ expenses, onUpdate, onDelete, onClearAll }:
         <div className="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Expense Log</h2>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Tap Edit to fix a wrong entry, or Delete to remove it</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+              {filteredExpenses.length === expenses.length
+                ? 'Tap Edit to fix a wrong entry, or Delete to remove it'
+                : `Showing ${filteredExpenses.length} of ${expenses.length} expenses`}
+            </p>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              if (confirm('Clear all expenses? This cannot be undone.')) {
-                cancelEdit();
-                onClearAll();
-              }
-            }}
-            className="text-xs text-red-600 hover:text-red-700 font-medium flex-shrink-0"
-          >
-            Clear all
-          </button>
+          <div className="flex items-center gap-3 flex-shrink-0">
+            {onLoadSamples && (
+              <button
+                type="button"
+                onClick={onLoadSamples}
+                className="text-xs text-brand-700 hover:text-brand-800 font-medium"
+              >
+                Add samples
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm('Clear all expenses? This cannot be undone.')) {
+                  cancelEdit();
+                  onClearAll();
+                }
+              }}
+              className="text-xs text-red-600 hover:text-red-700 font-medium"
+            >
+              Clear all
+            </button>
+          </div>
         </div>
 
+        <div className="px-4 sm:px-6 py-3 border-b border-gray-100 dark:border-gray-800 bg-gray-50/70 dark:bg-gray-900/40">
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <p className="text-xs font-medium text-gray-600 dark:text-gray-300">Filter by line item</p>
+            <div className="flex items-center gap-3">
+              {!allSelected && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedLineItems([...LINE_ITEMS])}
+                  className="text-xs font-medium text-brand-700 hover:text-brand-800"
+                >
+                  Select all
+                </button>
+              )}
+              {!noneSelected && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedLineItems([])}
+                  className="text-xs font-medium text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+                >
+                  Deselect all
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {LINE_ITEMS.map((item) => {
+              const active = selectedLineItems.includes(item);
+              return (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => toggleLineItem(item)}
+                  aria-pressed={active}
+                  className={`text-xs px-2.5 py-1 rounded-full border font-medium transition-colors ${
+                    active
+                      ? 'bg-brand-600 text-white border-brand-600'
+                      : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-brand-300'
+                  }`}
+                >
+                  {item}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {filteredExpenses.length === 0 ? (
+          <div className="px-4 sm:px-6 py-8 text-center">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {noneSelected
+                ? 'No line items selected. Choose one or more filters above.'
+                : 'No expenses match the selected line items.'}
+            </p>
+          </div>
+        ) : (
         <div className="divide-y divide-gray-100 dark:divide-gray-800">
-          {expenses.map((expense) => {
+          {filteredExpenses.map((expense) => {
             const isEditing = editingId === expense.id;
             const imageSrc = isEditing && draft?.imageData ? draft.imageData : expense.imageData;
 
@@ -251,6 +362,7 @@ export default function ExpenseLog({ expenses, onUpdate, onDelete, onClearAll }:
             );
           })}
         </div>
+        )}
       </section>
 
       {previewImage && (

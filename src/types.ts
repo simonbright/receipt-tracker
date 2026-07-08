@@ -77,12 +77,51 @@ export interface ReportSettings {
   notes: string;
   dateFrom: string;
   dateTo: string;
+  /** Selected line items for the report. Empty = none; all items = include everything. */
+  lineItems: LineItemType[];
+}
+
+/** Missing/undefined defaults to all. Explicit empty array means none selected. */
+export function normalizeSelectedLineItems(selected?: LineItemType[] | null): LineItemType[] {
+  if (selected == null) return [...LINE_ITEMS];
+  return selected.filter((item): item is LineItemType => LINE_ITEMS.includes(item));
+}
+
+export function isAllLineItemsSelected(selected: LineItemType[]): boolean {
+  return (
+    selected.length === LINE_ITEMS.length &&
+    LINE_ITEMS.every((item) => selected.includes(item))
+  );
+}
+
+export function isNoneLineItemsSelected(selected: LineItemType[]): boolean {
+  return selected.length === 0;
 }
 
 export function filterExpensesByDateRange(expenses: Expense[], from: string, to: string): Expense[] {
   if (!from || !to) return expenses;
   const [start, end] = from <= to ? [from, to] : [to, from];
   return expenses.filter((e) => e.date >= start && e.date <= end);
+}
+
+export function filterExpensesByLineItems(
+  expenses: Expense[],
+  selected: LineItemType[] | null | undefined
+): Expense[] {
+  const normalized = normalizeSelectedLineItems(selected);
+  if (isNoneLineItemsSelected(normalized)) return [];
+  if (isAllLineItemsSelected(normalized)) return expenses;
+  const allowed = new Set(normalized);
+  return expenses.filter((e) => allowed.has(e.lineItem));
+}
+
+export function filterExpensesForReport(
+  expenses: Expense[],
+  from: string,
+  to: string,
+  selectedLineItems: LineItemType[] | null | undefined
+): Expense[] {
+  return filterExpensesByLineItems(filterExpensesByDateRange(expenses, from, to), selectedLineItems);
 }
 
 export function defaultReportDateRange(expenses: Expense[]): { dateFrom: string; dateTo: string } {
