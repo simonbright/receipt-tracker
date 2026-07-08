@@ -90,6 +90,16 @@ export function useReminders() {
   const enabledCount = reminders.filter((r) => r.enabled && r.text.trim()).length;
   const needsHomeScreen = isIOS() && !isStandaloneApp();
 
+  const hydrateFromSync = useCallback((data: { reminders: Reminder[]; pushEnabled: boolean }) => {
+    const normalized = [...data.reminders];
+    while (normalized.length < MAX_REMINDERS) {
+      normalized.push(createEmptyReminder(uuidv4()));
+    }
+    setReminders(normalized.slice(0, MAX_REMINDERS));
+    setPushEnabled(data.pushEnabled);
+    writeStorage(PUSH_ENABLED_KEY, data.pushEnabled);
+  }, []);
+
   return {
     reminders,
     updateReminder,
@@ -100,5 +110,6 @@ export function useReminders() {
     pushError,
     pushConfigured,
     needsHomeScreen,
+    hydrateFromSync,
   };
 }

@@ -1,6 +1,10 @@
+import { useCallback } from 'react';
 import { useExpenses } from './hooks/useExpenses';
 import { useReminders } from './hooks/useReminders';
+import { useAutoSync } from './hooks/useAutoSync';
+import type { SyncPayload } from './lib/syncClient';
 import Header from './components/Header';
+import Footer from './components/Footer';
 import ReceiptCapture from './components/ReceiptCapture';
 import Reminders from './components/Reminders';
 import ExpenseLog from './components/ExpenseLog';
@@ -9,6 +13,29 @@ import ExpenseReport from './components/ExpenseReport';
 export default function App() {
   const expenseState = useExpenses();
   const reminderState = useReminders();
+
+  const onApplyRemote = useCallback(
+    (payload: SyncPayload) => {
+      expenseState.hydrateFromSync({
+        expenses: payload.expenses,
+        settings: payload.settings,
+      });
+      reminderState.hydrateFromSync({
+        reminders: payload.reminders,
+        pushEnabled: payload.pushEnabled,
+      });
+    },
+    [expenseState.hydrateFromSync, reminderState.hydrateFromSync]
+  );
+
+  const { syncStatus } = useAutoSync({
+    expenses: expenseState.expenses,
+    settings: expenseState.settings,
+    reminders: reminderState.reminders,
+    pushEnabled: reminderState.pushEnabled,
+    syncAvailable: expenseState.serverStatus?.syncConfigured ?? false,
+    onApplyRemote,
+  });
 
   return (
     <div className="min-h-screen">
@@ -50,6 +77,8 @@ export default function App() {
           </div>
         </div>
       </main>
+
+      <Footer syncStatus={syncStatus} syncEnabled={expenseState.serverStatus?.syncConfigured ?? false} />
     </div>
   );
 }

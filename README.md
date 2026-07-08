@@ -7,11 +7,11 @@ A web app for capturing receipts, parsing expense details, and emailing reimburs
 - **Camera or upload** — snap a photo on mobile/desktop or upload an existing image
 - **Automatic parsing** — extracts merchant, date, time, amount, and category
   - Client-side OCR (Tesseract.js) works out of the box
-  - Optional AI parsing (OpenAI GPT-4o-mini) when `OPENAI_API_KEY` is set
+  - Optional AI parsing via **OpenRouter** when `OPENROUTER_API_KEY` is set (default model: `google/gemini-2.5-flash-lite`, ~$0.0002/receipt)
 - **Expense log** — review, edit, or remove entries; click thumbnails to view full receipt
 - **Expense report** — running total, category breakdown with progress bars, line-item summary
 - **PDF export** — download a reimbursement report for a selected date range, with receipt images attached in the PDF
-- **Daily reminders** — up to 3 scheduled reminders per day with custom text and timezone (e.g. 5:00 AM EST — "Take picture of parking ticket")
+- **Cloud sync** — expenses, settings, and reminders auto-save to PostgreSQL (or local JSON in dev)
 
 ## Quick Start
 
@@ -39,7 +39,11 @@ cp .env.example .env
 | `SMTP_USER` | For email | Your email address |
 | `SMTP_PASS` | For email | App password (not your login password) |
 | `SMTP_FROM` | For email | From address |
-| `OPENAI_API_KEY` | Optional | Enables AI receipt parsing |
+| `OPENROUTER_API_KEY` | For AI parsing | Get from [openrouter.ai/keys](https://openrouter.ai/keys) |
+| `OPENROUTER_MODEL` | Optional | Vision model, default `google/gemini-2.5-flash-lite` |
+| `SYNC_KEY` | For cloud sync | Shared secret — must match `VITE_SYNC_KEY` |
+| `VITE_SYNC_KEY` | For cloud sync | Same value as `SYNC_KEY` (baked in at build time) |
+| `DATABASE_URL` | Production sync | Auto-set on Render when using the Postgres add-on |
 | `PORT` | Optional | API port (default 3001) |
 
 ### Gmail setup
@@ -56,7 +60,15 @@ cp .env.example .env
 4. Set the **From** and **To** dates for your report
 5. Click **Export PDF** to download the summary and receipt images for that period
 
-Data is stored in your browser's localStorage — it persists across sessions on the same device.
+Data is stored locally in your browser and **auto-synced to the database** when the server is configured. The footer shows **Synced** when cloud save is working.
+
+### Cloud sync setup
+
+1. Add a **PostgreSQL** database on Render (included in `render.yaml`)
+2. Set `SYNC_KEY` and `VITE_SYNC_KEY` to the same random secret (e.g. `openssl rand -hex 16`)
+3. Redeploy — mobile receipts sync automatically within ~2 seconds
+
+Without `DATABASE_URL`, local dev uses `server/data/sync-data.json` (not persistent across Render deploys).
 
 ## Deploy to Render (always-on, low cost)
 
@@ -66,7 +78,7 @@ This app deploys as **one Web Service** on Render's Starter plan — frontend an
 
 - Render's free web services sleep after inactivity; use Starter to avoid sleeping
 - Starter is Render's lowest-cost always-on web service plan
-- Expense data stays in the browser (localStorage) — no database needed
+- Expense data syncs to PostgreSQL when configured; otherwise stays in the browser only
 
 ### Option A — Blueprint (recommended)
 
@@ -75,7 +87,8 @@ This app deploys as **one Web Service** on Render's Starter plan — frontend an
 3. Connect your GitHub repo — Render reads `render.yaml` automatically
 4. Add environment variables when prompted:
    - `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` — for email
-   - `OPENAI_API_KEY` — optional, for better receipt parsing
+   - `OPENROUTER_API_KEY` — optional, for better receipt parsing via OpenRouter
+   - `SYNC_KEY` and `VITE_SYNC_KEY` — same secret, for auto cloud sync
 5. Click **Apply** — Render builds and deploys
 
 Your app will be live at `https://receipt-tracker-xxxx.onrender.com`.

@@ -33,7 +33,7 @@ export default function ExpenseReport({
   );
 
   const totals = useMemo(() => computeTotals(filteredExpenses), [filteredExpenses]);
-  const sortedCategories = Object.entries(totals.byCategory).sort(([, a], [, b]) => b - a);
+  const sortedLineItems = Object.entries(totals.byLineItem).sort(([, a], [, b]) => b - a);
 
   const update = (field: keyof ReportSettings, value: string) => {
     onSettingsChange({ ...settings, [field]: value });
@@ -73,9 +73,9 @@ export default function ExpenseReport({
 
   return (
     <section className="card overflow-hidden lg:sticky lg:top-24">
-      <div className="px-6 py-4 border-b border-gray-200 bg-brand-50">
-        <h2 className="text-lg font-semibold text-brand-900">Expense Report</h2>
-        <p className="text-xs text-brand-700 mt-0.5">
+      <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-brand-50 dark:bg-brand-950">
+        <h2 className="text-lg font-semibold text-brand-900 dark:text-brand-100">Expense Report</h2>
+        <p className="text-xs text-brand-700 dark:text-brand-300 mt-0.5">
           {totals.count} item{totals.count !== 1 ? 's' : ''} in selected range
         </p>
       </div>
@@ -108,29 +108,29 @@ export default function ExpenseReport({
           </p>
         )}
 
-        <div className="text-center py-4 bg-gray-50 rounded-xl">
-          <p className="text-sm text-gray-500 mb-1">Total Reimbursement</p>
-          <p className="text-4xl font-bold text-brand-700">{formatCurrency(totals.grandTotal)}</p>
+        <div className="text-center py-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">Total Reimbursement</p>
+          <p className="text-4xl font-bold text-brand-700 dark:text-brand-400">{formatCurrency(totals.grandTotal)}</p>
           {dateFrom && dateTo && !rangeInvalid && (
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
               {formatDate(dateFrom)} – {formatDate(dateTo)}
             </p>
           )}
         </div>
 
-        {sortedCategories.length > 0 && (
+        {sortedLineItems.length > 0 && (
           <div>
-            <h3 className="text-sm font-semibold text-gray-700 mb-3">Breakdown by Category</h3>
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Breakdown by Line Item</h3>
             <div className="space-y-2">
-              {sortedCategories.map(([cat, amt]) => {
+              {sortedLineItems.map(([item, amt]) => {
                 const pct = totals.grandTotal > 0 ? (amt / totals.grandTotal) * 100 : 0;
                 return (
-                  <div key={cat}>
+                  <div key={item}>
                     <div className="flex justify-between text-sm mb-1">
-                      <span className="text-gray-600">{cat}</span>
-                      <span className="font-medium text-gray-900">{formatCurrency(amt)}</span>
+                      <span className="text-gray-600 dark:text-gray-400">{item}</span>
+                      <span className="font-medium text-gray-900 dark:text-gray-100">{formatCurrency(amt)}</span>
                     </div>
-                    <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-brand-500 rounded-full transition-all"
                         style={{ width: `${pct}%` }}
@@ -150,7 +150,10 @@ export default function ExpenseReport({
               {filteredExpenses.map((e) => (
                 <div key={e.id} className="flex justify-between text-sm py-1.5 border-b border-gray-50 last:border-0">
                   <div className="min-w-0 pr-2">
-                    <p className="font-medium text-gray-800 truncate">{e.merchant || '—'}</p>
+                    <p className="font-medium text-gray-800 truncate">
+                      {e.lineItem}
+                      {e.merchant ? ` · ${e.merchant}` : ''}
+                    </p>
                     <p className="text-xs text-gray-400">{formatDate(e.date)}</p>
                   </div>
                   <span className="font-medium text-gray-900 flex-shrink-0">{formatCurrency(e.amount)}</span>
@@ -217,7 +220,7 @@ export default function ExpenseReport({
           </button>
 
           <p className="text-xs text-gray-500">
-            PDF includes the summary, category breakdown, and a receipt image for each expense in the selected range.
+            PDF includes the summary, line-item breakdown, and a receipt image for each expense in the selected range.
           </p>
 
           {exportStatus && (

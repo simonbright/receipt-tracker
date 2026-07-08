@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { readStorage, writeStorage } from '../lib/storage';
+import { useState, useEffect } from 'react';
+import { useTheme } from '../context/ThemeContext';
 
-const CAR_KEY = 'receipt-tracker-car-logo';
+const HINT_DURATION_MS = 2000;
 
 export const CARS = [
   { id: 'supra', name: 'Toyota Supra', src: '/logos/supra.svg' },
@@ -12,34 +12,52 @@ export const CARS = [
 ] as const;
 
 export default function CarLogo() {
-  const [index, setIndex] = useState(() => readStorage(CAR_KEY, 0) % CARS.length);
+  const { brandIndex, cycleBrand } = useTheme();
   const [pop, setPop] = useState(false);
-  const car = CARS[index];
+  const [showHint, setShowHint] = useState(true);
+  const car = CARS[brandIndex];
+
+  useEffect(() => {
+    const timer = setTimeout(() => setShowHint(false), HINT_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleClick = () => {
+    setShowHint(false);
     setPop(true);
     setTimeout(() => setPop(false), 200);
-    setIndex((prev) => {
-      const next = (prev + 1) % CARS.length;
-      writeStorage(CAR_KEY, next);
-      return next;
-    });
+    cycleBrand();
   };
 
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      title="Tap to change logo"
-      aria-label="App logo. Tap to change."
-      className={`w-16 h-16 rounded-2xl bg-white border border-gray-200 flex items-center justify-center p-2 shadow-md hover:shadow-lg transition-all duration-200 hover:scale-105 active:scale-95 ${pop ? 'scale-110 rotate-3' : ''}`}
-    >
-      <img
-        src={car.src}
-        alt=""
-        className="w-full h-full object-contain"
-        draggable={false}
-      />
-    </button>
+    <div className="relative">
+      <button
+        type="button"
+        onClick={handleClick}
+        title={`${car.name} — tap to change theme`}
+        aria-label={`${car.name} logo. Tap to change theme.`}
+        className={`w-16 h-16 rounded-2xl bg-white dark:bg-gray-800 border flex items-center justify-center p-2 shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105 active:scale-95 ${
+          showHint
+            ? 'border-brand-400 ring-4 ring-brand-300/60 ring-offset-2 dark:ring-offset-gray-900 shadow-lg shadow-brand-200/80 dark:shadow-brand-900/40 scale-105'
+            : 'border-gray-200 dark:border-gray-600'
+        } ${pop ? 'scale-110 rotate-3' : ''}`}
+      >
+        <img
+          src={car.src}
+          alt=""
+          className="w-full h-full object-contain"
+          draggable={false}
+        />
+      </button>
+
+      {showHint && (
+        <span
+          className="absolute bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2 text-[10px] font-bold text-white bg-brand-600 px-2 py-0.5 rounded-full shadow-sm whitespace-nowrap pointer-events-none animate-pulse"
+          aria-hidden
+        >
+          Tap me
+        </span>
+      )}
+    </div>
   );
 }

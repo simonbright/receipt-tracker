@@ -28,15 +28,15 @@ export default function Reminders({
 }: RemindersProps) {
   return (
     <section className="card overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between gap-4">
+      <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-gray-900">Daily Reminders</h2>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Daily Reminders</h2>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
             Up to {MAX_REMINDERS} reminders per day · {enabledCount} active
           </p>
         </div>
         {pushEnabled && notificationPermission === 'granted' ? (
-          <span className="text-xs text-brand-700 bg-brand-50 px-2.5 py-1 rounded-full font-medium">
+          <span className="text-xs text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-950 px-2.5 py-1 rounded-full font-medium">
             Phone alerts on
           </span>
         ) : notificationPermission !== 'unsupported' && !needsHomeScreen ? (
@@ -69,7 +69,7 @@ export default function Reminders({
         </div>
       )}
 
-      <div className="divide-y divide-gray-100">
+      <div className="divide-y divide-gray-100 dark:divide-gray-800">
         {reminders.map((reminder, index) => (
           <ReminderRow
             key={reminder.id}
@@ -80,8 +80,8 @@ export default function Reminders({
         ))}
       </div>
 
-      <div className="px-6 py-3 bg-gray-50 border-t border-gray-100">
-        <p className="text-xs text-gray-500">
+      <div className="px-6 py-3 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-100 dark:border-gray-800">
+        <p className="text-xs text-gray-500 dark:text-gray-400">
           Reminders are sent as phone notifications — even when the app is closed.
           {notificationPermission === 'denied' && (
             <span className="text-amber-700"> Notifications are blocked in your browser settings.</span>
@@ -106,7 +106,7 @@ function ReminderRow({
   const abbrev = getTimezoneAbbrev(reminder.timezone);
 
   return (
-    <div className={`px-6 py-4 ${reminder.enabled ? 'bg-white' : 'bg-gray-50/50'}`}>
+    <div className={`px-6 py-4 ${reminder.enabled ? 'bg-white dark:bg-gray-900' : 'bg-gray-50/50 dark:bg-gray-800/30'}`}>
       <div className="flex items-center gap-3 mb-3">
         <label className="relative inline-flex items-center cursor-pointer">
           <input
@@ -115,9 +115,9 @@ function ReminderRow({
             onChange={(e) => onUpdate(reminder.id, { enabled: e.target.checked })}
             className="sr-only peer"
           />
-          <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-600" />
+          <div className="w-9 h-5 bg-gray-200 dark:bg-gray-700 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-brand-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-600" />
         </label>
-        <span className="text-sm font-medium text-gray-700">Reminder {index + 1}</span>
+        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Reminder {index + 1}</span>
         {reminder.enabled && nextLabel && (
           <span className="text-xs text-gray-400 ml-auto hidden sm:inline">{nextLabel}</span>
         )}

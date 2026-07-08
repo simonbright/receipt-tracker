@@ -2,16 +2,33 @@ import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import nodemailer from 'nodemailer';
-import OpenAI from 'openai';
 import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { setupPush, isPushConfigured } from './push.js';
+import { isAiConfigured, parseReceiptWithAi } from './ai.js';
+import { initDb, isSyncConfigured, getSyncBackend } from './db.js';
+import { setupSync, isSyncKeyConfigured } from './sync.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const distPath = path.join(__dirname, '..', 'dist');
 const isProduction = process.env.NODE_ENV === 'production';
+
+function getDeployInfo() {
+  const candidates = [
+    path.join(distPath, 'build-info.json'),
+    path.join(__dirname, '..', 'public', 'build-info.json'),
+  ];
+  for (const filePath of candidates) {
+    if (existsSync(filePath)) {
+      return JSON.parse(readFileSync(filePath, 'utf8'));
+    }
+  }
+  return null;
+}
+
+const deployInfo = getDeployInfo();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -47,14 +64,14 @@ function buildReportHtml({ reportTitle, employeeName, expenses, totals, notes })
       <tr>
         <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${e.date || '—'}</td>
         <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${e.time || '—'}</td>
+        <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${e.lineItem || 'Parking'}</td>
         <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${e.merchant || '—'}</td>
-        <td style="padding:8px;border-bottom:1px solid #e5e7eb;">${e.category || '—'}</td>
         <td style="padding:8px;border-bottom:1px solid #e5e7eb;text-align:right;">${formatCurrency(e.amount)}</td>
       </tr>`
     )
     .join('');
 
-  const categoryRows = Object.entries(totals.byCategory)
+  const categoryRows = Object.entries(totals.byLineItem || totals.byCategory || {})
     .sort(([, a], [, b]) => b - a)
     .map(
       ([cat, amt]) => `
@@ -78,8 +95,8 @@ function buildReportHtml({ reportTitle, employeeName, expenses, totals, notes })
       <tr style="background:#f0fdf4;">
         <th style="padding:10px 8px;text-align:left;font-size:12px;text-transform:uppercase;color:#15803d;">Date</th>
         <th style="padding:10px 8px;text-align:left;font-size:12px;text-transform:uppercase;color:#15803d;">Time</th>
+        <th style="padding:10px 8px;text-align:left;font-size:12px;text-transform:uppercase;color:#15803d;">Line Item</th>
         <th style="padding:10px 8px;text-align:left;font-size:12px;text-transform:uppercase;color:#15803d;">Merchant</th>
-        <th style="padding:10px 8px;text-align:left;font-size:12px;text-transform:uppercase;color:#15803d;">Category</th>
         <th style="padding:10px 8px;text-align:right;font-size:12px;text-transform:uppercase;color:#15803d;">Amount</th>
       </tr>
     </thead>
@@ -92,7 +109,7 @@ function buildReportHtml({ reportTitle, employeeName, expenses, totals, notes })
     </tfoot>
   </table>
 
-  <h2 style="font-size:16px;color:#374151;margin:0 0 12px;">Breakdown by Category</h2>
+  <h2 style="font-size:16px;color:#374151;margin:0 0 12px;">Breakdown by Line Item</h2>
   <table style="width:100%;border-collapse:collapse;margin-bottom:24px;background:#fafafa;border-radius:8px;">
     <tbody>${categoryRows}</tbody>
   </table>
@@ -108,79 +125,48 @@ app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     smtpConfigured: Boolean(getTransporter()),
-    aiConfigured: Boolean(process.env.OPENAI_API_KEY),
+    aiConfigured: isAiConfigured(),
     pushConfigured: isPushConfigured(),
+    syncConfigured: isSyncConfigured(),
+    syncBackend: getSyncBackend(),
+    syncKeyRequired: isSyncKeyConfigured(),
+    deploy: deployInfo,
   });
 });
 
+await initDb();
+setupSync(app);
 setupPush(app);
 
 app.post('/api/parse-receipt', upload.single('image'), async (req, res) => {
   try {
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) {
-      return res.status(503).json({ error: 'AI parsing not configured. Use client-side OCR instead.' });
+    if (!isAiConfigured()) {
+      return res.status(503).json({ error: 'AI parsing not configured. Set OPENROUTER_API_KEY or use client-side OCR.' });
     }
 
     const imageBuffer = req.file?.buffer;
     const base64FromBody = req.body?.imageBase64;
 
     let base64;
+    let mimeType = 'jpeg';
     if (imageBuffer) {
       base64 = imageBuffer.toString('base64');
+      if (req.file.mimetype?.includes('png')) mimeType = 'png';
     } else if (base64FromBody) {
+      const mimeMatch = base64FromBody.match(/^data:image\/(\w+);base64,/);
+      if (mimeMatch) mimeType = mimeMatch[1];
       base64 = base64FromBody.replace(/^data:image\/\w+;base64,/, '');
     } else {
       return res.status(400).json({ error: 'No image provided' });
     }
 
-    const openai = new OpenAI({ apiKey });
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: `Extract receipt information from this image. Return ONLY valid JSON with these fields:
-{
-  "merchant": "store/restaurant name (e.g. Esso Circle K, not the address)",
-  "date": "YYYY-MM-DD",
-  "time": "HH:MM in 24h format",
-  "amount": 0.00,
-  "category": "one of: Meals, Travel, Office Supplies, Transportation, Lodging, Entertainment, Other",
-  "description": "brief description of purchase",
-  "confidence": 0.0 to 1.0
-}
-
-Rules:
-- amount must be the final total paid (e.g. "TOTAL CAD $ 31.18" -> 31.18)
-- For gas/fuel receipts (Esso, Circle K, Petro-Canada, Shell), category is Transportation
-- Parse labeled fields like DATE: and TIME: when present
-- Canadian receipts may show CAD, HST, GST — still use the total purchase amount
-- Use null for fields you cannot determine`,
-            },
-            {
-              type: 'image_url',
-              image_url: { url: `data:image/jpeg;base64,${base64}` },
-            },
-          ],
-        },
-      ],
-      max_tokens: 500,
-    });
-
-    const content = response.choices[0]?.message?.content || '';
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      return res.status(422).json({ error: 'Could not parse AI response', raw: content });
-    }
-
-    const parsed = JSON.parse(jsonMatch[0]);
-    res.json({ parsed, source: 'ai' });
+    const parsed = await parseReceiptWithAi(base64, mimeType);
+    res.json({ parsed, source: 'openrouter' });
   } catch (err) {
     console.error('Parse error:', err);
+    if (err.raw) {
+      return res.status(422).json({ error: 'Could not parse AI response', raw: err.raw });
+    }
     res.status(500).json({ error: err.message || 'Failed to parse receipt' });
   }
 });

@@ -79,12 +79,12 @@ export async function exportExpenseReportPdf({
 
   autoTable(doc, {
     startY: y,
-    head: [['Date', 'Time', 'Merchant', 'Category', 'Amount']],
+    head: [['Date', 'Time', 'Line Item', 'Merchant', 'Amount']],
     body: expenses.map((e) => [
       formatDate(e.date),
       e.time || '—',
+      e.lineItem,
       e.merchant || '—',
-      e.category,
       formatCurrency(e.amount),
     ]),
     foot: [['', '', '', 'Total', formatCurrency(totals.grandTotal)]],
@@ -98,17 +98,17 @@ export async function exportExpenseReportPdf({
   const tableEnd = (doc as import('jspdf').jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y + 40;
   y = tableEnd + 10;
 
-  const categories = Object.entries(totals.byCategory).sort(([, a], [, b]) => b - a);
-  if (categories.length > 0) {
+  const lineItems = Object.entries(totals.byLineItem).sort(([, a], [, b]) => b - a);
+  if (lineItems.length > 0) {
     doc.setFontSize(12);
     doc.setTextColor(55, 65, 81);
-    doc.text('Breakdown by Category', margin, y);
+    doc.text('Breakdown by Line Item', margin, y);
     y += 4;
 
     autoTable(doc, {
       startY: y,
-      head: [['Category', 'Amount']],
-      body: categories.map(([cat, amt]) => [cat, formatCurrency(amt)]),
+      head: [['Line Item', 'Amount']],
+      body: lineItems.map(([item, amt]) => [item, formatCurrency(amt)]),
       styles: { fontSize: 9, cellPadding: 2.5 },
       headStyles: { fillColor: [243, 244, 246], textColor: [55, 65, 81] },
       columnStyles: { 1: { halign: 'right' } },

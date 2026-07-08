@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import type { Expense, ExpenseCategory } from '../types';
-import { CATEGORIES, formatCurrency, formatDate } from '../types';
+import type { Expense, LineItemType } from '../types';
+import { LINE_ITEMS, formatCurrency, formatDate, lineItemToCategory } from '../types';
 
 interface ExpenseLogProps {
   expenses: Expense[];
@@ -17,6 +17,7 @@ function toDraft(expense: Expense): DraftExpense {
     date: expense.date,
     time: expense.time,
     amount: expense.amount,
+    lineItem: expense.lineItem,
     category: expense.category,
     description: expense.description,
   };
@@ -44,7 +45,8 @@ export default function ExpenseLog({ expenses, onUpdate, onDelete, onClearAll }:
       date: draft.date,
       time: draft.time,
       amount: draft.amount,
-      category: draft.category,
+      lineItem: draft.lineItem,
+      category: lineItemToCategory(draft.lineItem),
       description: draft.description.trim(),
       ...(draft.imageData ? { imageData: draft.imageData } : {}),
     });
@@ -76,8 +78,8 @@ export default function ExpenseLog({ expenses, onUpdate, onDelete, onClearAll }:
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
         </div>
-        <h2 className="text-lg font-semibold text-gray-900 mb-1">No expenses yet</h2>
-        <p className="text-sm text-gray-500">Add your first receipt above to start building your expense report.</p>
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">No expenses yet</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400">Add your first receipt above to start building your expense report.</p>
       </section>
     );
   }
@@ -85,10 +87,10 @@ export default function ExpenseLog({ expenses, onUpdate, onDelete, onClearAll }:
   return (
     <>
       <section className="card overflow-hidden">
-        <div className="px-4 sm:px-6 py-4 border-b border-gray-200 flex items-center justify-between gap-3">
+        <div className="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between gap-3">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Expense Log</h2>
-            <p className="text-xs text-gray-500 mt-0.5">Tap Edit to fix a wrong entry, or Delete to remove it</p>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Expense Log</h2>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Tap Edit to fix a wrong entry, or Delete to remove it</p>
           </div>
           <button
             type="button"
@@ -104,7 +106,7 @@ export default function ExpenseLog({ expenses, onUpdate, onDelete, onClearAll }:
           </button>
         </div>
 
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-gray-100 dark:divide-gray-800">
           {expenses.map((expense) => {
             const isEditing = editingId === expense.id;
             const imageSrc = isEditing && draft?.imageData ? draft.imageData : expense.imageData;
@@ -127,7 +129,7 @@ export default function ExpenseLog({ expenses, onUpdate, onDelete, onClearAll }:
                           <p className="font-medium text-gray-900 truncate">
                             {expense.merchant || 'Unknown merchant'}
                           </p>
-                          <CategoryBadge category={expense.category} />
+                          <LineItemBadge lineItem={expense.lineItem} />
                         </div>
                         <p className="text-sm text-gray-500 mt-0.5">
                           {formatDate(expense.date)}
@@ -209,16 +211,16 @@ export default function ExpenseLog({ expenses, onUpdate, onDelete, onClearAll }:
                           onChange={(v) => setDraft({ ...draft, time: v })}
                         />
                         <div>
-                          <label className="label">Category</label>
+                          <label className="label">Line item</label>
                           <select
                             className="input"
-                            value={draft.category}
+                            value={draft.lineItem}
                             onChange={(e) =>
-                              setDraft({ ...draft, category: e.target.value as ExpenseCategory })
+                              setDraft({ ...draft, lineItem: e.target.value as LineItemType })
                             }
                           >
-                            {CATEGORIES.map((c) => (
-                              <option key={c} value={c}>{c}</option>
+                            {LINE_ITEMS.map((item) => (
+                              <option key={item} value={item}>{item}</option>
                             ))}
                           </select>
                         </div>
@@ -294,19 +296,20 @@ function Field({
   );
 }
 
-function CategoryBadge({ category }: { category: string }) {
+function LineItemBadge({ lineItem }: { lineItem: string }) {
   const colors: Record<string, string> = {
+    Parking: 'bg-slate-100 text-slate-700',
+    Gas: 'bg-cyan-50 text-cyan-700',
+    Toll: 'bg-blue-50 text-blue-700',
+    Transit: 'bg-indigo-50 text-indigo-700',
     Meals: 'bg-orange-50 text-orange-700',
-    Travel: 'bg-blue-50 text-blue-700',
-    'Office Supplies': 'bg-purple-50 text-purple-700',
-    Transportation: 'bg-cyan-50 text-cyan-700',
-    Lodging: 'bg-indigo-50 text-indigo-700',
-    Entertainment: 'bg-pink-50 text-pink-700',
+    Lodging: 'bg-purple-50 text-purple-700',
+    'Office Supplies': 'bg-violet-50 text-violet-700',
     Other: 'bg-gray-100 text-gray-600',
   };
   return (
-    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colors[category] || colors.Other}`}>
-      {category}
+    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${colors[lineItem] || colors.Other}`}>
+      {lineItem}
     </span>
   );
 }

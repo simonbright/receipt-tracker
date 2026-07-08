@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Expense, ReportSettings } from '../types';
-import { computeTotals, defaultReportDateRange } from '../types';
+import { computeTotals, defaultReportDateRange, normalizeExpense } from '../types';
 import { readStorage, writeStorage } from '../lib/storage';
 
 const EXPENSES_KEY = 'receipt-tracker-expenses';
@@ -18,7 +18,7 @@ function buildDefaultSettings(expenses: Expense[]): ReportSettings {
 }
 
 function loadExpenses(): Expense[] {
-  return readStorage<Expense[]>(EXPENSES_KEY, []);
+  return readStorage<Expense[]>(EXPENSES_KEY, []).map(normalizeExpense);
 }
 
 function loadSettings(expenses: Expense[]): ReportSettings {
@@ -36,7 +36,7 @@ function loadSettings(expenses: Expense[]): ReportSettings {
 export function useExpenses() {
   const [expenses, setExpenses] = useState<Expense[]>(loadExpenses);
   const [settings, setSettings] = useState<ReportSettings>(() => loadSettings(loadExpenses()));
-  const [serverStatus, setServerStatus] = useState<{ aiConfigured: boolean } | null>(null);
+  const [serverStatus, setServerStatus] = useState<{ aiConfigured: boolean; syncConfigured: boolean } | null>(null);
 
   useEffect(() => {
     writeStorage(EXPENSES_KEY, expenses);
@@ -52,8 +52,13 @@ export function useExpenses() {
         if (!r.ok) throw new Error('API unavailable');
         return r.json();
       })
-      .then((data) => setServerStatus({ aiConfigured: data.aiConfigured }))
-      .catch(() => setServerStatus({ aiConfigured: false }));
+      .then((data) =>
+        setServerStatus({
+          aiConfigured: data.aiConfigured,
+          syncConfigured: data.syncConfigured ?? false,
+        })
+      )
+      .catch(() => setServerStatus({ aiConfigured: false, syncConfigured: false }));
   }, []);
 
   const addExpense = useCallback((expense: Expense) => {
@@ -72,6 +77,11 @@ export function useExpenses() {
     setExpenses([]);
   }, []);
 
+  const hydrateFromSync = useCallback((data: { expenses: Expense[]; settings: ReportSettings }) => {
+    setExpenses(data.expenses.map(normalizeExpense));
+    setSettings(data.settings);
+  }, []);
+
   const totals = computeTotals(expenses);
 
   return {
@@ -82,6 +92,7 @@ export function useExpenses() {
     updateExpense,
     deleteExpense,
     clearAll,
+    hydrateFromSync,
     totals,
     serverStatus,
   };

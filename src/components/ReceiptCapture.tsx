@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import type { Expense, ExpenseCategory } from '../types';
-import { CATEGORIES } from '../types';
+import type { Expense, LineItemType } from '../types';
+import { DEFAULT_LINE_ITEM, LINE_ITEMS, lineItemToCategory } from '../types';
 import { parseReceipt } from '../lib/receiptParser';
 
 interface ReceiptCaptureProps {
@@ -33,7 +33,7 @@ export default function ReceiptCapture({ onAddExpense, aiAvailable }: ReceiptCap
     date: new Date().toISOString().slice(0, 10),
     time: new Date().toTimeString().slice(0, 5),
     amount: '',
-    category: 'Other' as ExpenseCategory,
+    lineItem: DEFAULT_LINE_ITEM as LineItemType,
     description: '',
   });
 
@@ -55,7 +55,7 @@ export default function ReceiptCapture({ onAddExpense, aiAvailable }: ReceiptCap
       date: new Date().toISOString().slice(0, 10),
       time: new Date().toTimeString().slice(0, 5),
       amount: '',
-      category: 'Other',
+      lineItem: DEFAULT_LINE_ITEM,
       description: '',
     });
   }, [stopCamera]);
@@ -123,7 +123,7 @@ export default function ReceiptCapture({ onAddExpense, aiAvailable }: ReceiptCap
         date: parsed.date || new Date().toISOString().slice(0, 10),
         time: parsed.time?.slice(0, 5) || new Date().toTimeString().slice(0, 5),
         amount: parsed.amount != null ? parsed.amount.toFixed(2) : '',
-        category: parsed.category || 'Other',
+        lineItem: parsed.lineItem || DEFAULT_LINE_ITEM,
         description: parsed.description || '',
       });
       setParseProgress(
@@ -147,7 +147,8 @@ export default function ReceiptCapture({ onAddExpense, aiAvailable }: ReceiptCap
       date: form.date,
       time: form.time,
       amount: parseFloat(form.amount),
-      category: form.category,
+      lineItem: form.lineItem,
+      category: lineItemToCategory(form.lineItem),
       description: form.description,
       imageData,
       createdAt: new Date().toISOString(),
@@ -159,8 +160,8 @@ export default function ReceiptCapture({ onAddExpense, aiAvailable }: ReceiptCap
 
   return (
     <section className="card p-6">
-      <h2 className="text-lg font-semibold text-gray-900 mb-1">Add Receipt</h2>
-      <p className="text-sm text-gray-500 mb-6">
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">Add Receipt</h2>
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
         Snap a photo or upload an image — we'll extract the date, time, and amount automatically.
       </p>
 
@@ -168,15 +169,15 @@ export default function ReceiptCapture({ onAddExpense, aiAvailable }: ReceiptCap
         <div className="grid sm:grid-cols-2 gap-4">
           {isMobile ? (
             <>
-              <label className="flex flex-col items-center gap-3 p-8 rounded-xl border-2 border-dashed border-brand-300 bg-brand-50 hover:bg-brand-100 transition-colors cursor-pointer">
+              <label className="flex flex-col items-center gap-3 p-8 rounded-xl border-2 border-dashed border-brand-300 dark:border-brand-700 bg-brand-50 dark:bg-brand-950 hover:bg-brand-100 dark:hover:bg-brand-900 transition-colors cursor-pointer">
                 <div className="w-14 h-14 bg-brand-600 rounded-full flex items-center justify-center">
                   <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
                 </div>
-                <span className="font-medium text-brand-800">Take Photo</span>
-                <span className="text-xs text-brand-600">Opens your camera</span>
+                <span className="font-medium text-brand-800 dark:text-brand-200">Take Photo</span>
+                <span className="text-xs text-brand-600 dark:text-brand-400">Opens your camera</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -186,7 +187,7 @@ export default function ReceiptCapture({ onAddExpense, aiAvailable }: ReceiptCap
                 />
               </label>
 
-              <label className="flex flex-col items-center gap-3 p-8 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer">
+              <label className="flex flex-col items-center gap-3 p-8 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors cursor-pointer">
                 <div className="w-14 h-14 bg-gray-600 rounded-full flex items-center justify-center">
                   <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -207,7 +208,7 @@ export default function ReceiptCapture({ onAddExpense, aiAvailable }: ReceiptCap
               <button
                 type="button"
                 onClick={startCamera}
-                className="flex flex-col items-center gap-3 p-8 rounded-xl border-2 border-dashed border-brand-300 bg-brand-50 hover:bg-brand-100 transition-colors"
+                className="flex flex-col items-center gap-3 p-8 rounded-xl border-2 border-dashed border-brand-300 dark:border-brand-700 bg-brand-50 dark:bg-brand-950 hover:bg-brand-100 dark:hover:bg-brand-900 transition-colors"
               >
                 <div className="w-14 h-14 bg-brand-600 rounded-full flex items-center justify-center">
                   <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -327,14 +328,14 @@ export default function ReceiptCapture({ onAddExpense, aiAvailable }: ReceiptCap
                 />
               </div>
               <div>
-                <label className="label">Category</label>
+                <label className="label">Line item</label>
                 <select
                   className="input"
-                  value={form.category}
-                  onChange={(e) => setForm({ ...form, category: e.target.value as ExpenseCategory })}
+                  value={form.lineItem}
+                  onChange={(e) => setForm({ ...form, lineItem: e.target.value as LineItemType })}
                 >
-                  {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>{c}</option>
+                  {LINE_ITEMS.map((item) => (
+                    <option key={item} value={item}>{item}</option>
                   ))}
                 </select>
               </div>

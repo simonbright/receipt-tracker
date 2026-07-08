@@ -4,11 +4,35 @@ export interface Expense {
   date: string;
   time: string;
   amount: number;
+  lineItem: LineItemType;
   category: ExpenseCategory;
   description: string;
   imageData: string;
   createdAt: string;
 }
+
+export type LineItemType =
+  | 'Parking'
+  | 'Gas'
+  | 'Toll'
+  | 'Transit'
+  | 'Meals'
+  | 'Lodging'
+  | 'Office Supplies'
+  | 'Other';
+
+export const LINE_ITEMS: LineItemType[] = [
+  'Parking',
+  'Gas',
+  'Toll',
+  'Transit',
+  'Meals',
+  'Lodging',
+  'Office Supplies',
+  'Other',
+];
+
+export const DEFAULT_LINE_ITEM: LineItemType = 'Parking';
 
 export type ExpenseCategory =
   | 'Meals'
@@ -34,6 +58,7 @@ export interface ParsedReceipt {
   date: string | null;
   time: string | null;
   amount: number | null;
+  lineItem: LineItemType | null;
   category: ExpenseCategory | null;
   description: string | null;
   confidence: number;
@@ -42,6 +67,7 @@ export interface ParsedReceipt {
 export interface ExpenseTotals {
   grandTotal: number;
   byCategory: Record<string, number>;
+  byLineItem: Record<string, number>;
   count: number;
 }
 
@@ -106,16 +132,77 @@ export function createEmptyReminder(id: string): Reminder {
   };
 }
 
+export function lineItemToCategory(lineItem: LineItemType): ExpenseCategory {
+  switch (lineItem) {
+    case 'Gas':
+    case 'Parking':
+    case 'Toll':
+    case 'Transit':
+      return 'Transportation';
+    case 'Meals':
+      return 'Meals';
+    case 'Lodging':
+      return 'Lodging';
+    case 'Office Supplies':
+      return 'Office Supplies';
+    default:
+      return 'Other';
+  }
+}
+
+export function guessLineItem(text: string, merchant: string | null): LineItemType {
+  const combined = `${text} ${merchant || ''}`.toLowerCase();
+
+  if (/fuel|gasoline|petrol|esso|circle\s*k|petro|shell|chevron|ultramar|pump|litre|liter|\bl\b.*\$\/l|hst included in fuel|gst included in fuel/.test(combined)) {
+    return 'Gas';
+  }
+  if (/parking|park\s*ade|garage|impark|indigo|honk|pay\s*by\s*phone|meter/.test(combined)) {
+    return 'Parking';
+  }
+  if (/toll|407|ez\s*pass|e-zpass|fastrak|peach\s*pass/.test(combined)) {
+    return 'Toll';
+  }
+  if (/uber|lyft|taxi|cab\b|transit|metro|bus\b|train|subway|presto|ttc|bart|cta/.test(combined)) {
+    return 'Transit';
+  }
+  if (/restaurant|cafe|coffee|starbucks|mcdonald|pizza|food|diner|grill|kitchen|bar\b|brew/.test(combined)) {
+    return 'Meals';
+  }
+  if (/hotel|motel|airbnb|lodging|inn|resort/.test(combined)) {
+    return 'Lodging';
+  }
+  if (/office|staples|supplies|paper|ink|toner/.test(combined)) {
+    return 'Office Supplies';
+  }
+
+  return DEFAULT_LINE_ITEM;
+}
+
+export function normalizeExpense(expense: Expense): Expense {
+  const lineItem =
+    expense.lineItem && LINE_ITEMS.includes(expense.lineItem)
+      ? expense.lineItem
+      : guessLineItem(`${expense.description} ${expense.merchant}`, expense.merchant);
+
+  return {
+    ...expense,
+    lineItem,
+    category: lineItemToCategory(lineItem),
+  };
+}
+
 export function computeTotals(expenses: Expense[]): ExpenseTotals {
   const byCategory: Record<string, number> = {};
+  const byLineItem: Record<string, number> = {};
   let grandTotal = 0;
 
   for (const e of expenses) {
     grandTotal += e.amount;
     byCategory[e.category] = (byCategory[e.category] || 0) + e.amount;
+    byLineItem[e.lineItem] = (byLineItem[e.lineItem] || 0) + e.amount;
   }
 
-  return { grandTotal, byCategory, count: expenses.length };
+  return { grandTotal, byCategory, byLineItem, count: expenses.length };
 }
 
 export function formatCurrency(amount: number): string {

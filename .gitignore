@@ -4,3 +4,5 @@ dist/
 *.log
 .DS_Store
 server/data/
+public/build-info.json
+eng.traineddata

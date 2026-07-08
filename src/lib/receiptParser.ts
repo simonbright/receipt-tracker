@@ -1,5 +1,5 @@
-import type { ParsedReceipt, ExpenseCategory } from '../types';
-import { CATEGORIES } from '../types';
+import type { ParsedReceipt, LineItemType } from '../types';
+import { DEFAULT_LINE_ITEM, LINE_ITEMS, guessLineItem, lineItemToCategory } from '../types';
 
 const DATE_PATTERNS = [
   /DATE[:\s]+(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/i,
@@ -204,20 +204,6 @@ function guessMerchant(text: string, lines: string[]): string | null {
   return null;
 }
 
-function guessCategory(text: string, merchant: string | null): ExpenseCategory {
-  const combined = `${text} ${merchant || ''}`.toLowerCase();
-  if (/fuel|gas|gasoline|petrol|esso|circle\s*k|petro|shell|chevron|ultramar|pump|litre|liter|\bl\b.*\$\/l|hst included in fuel|gst included in fuel/.test(combined)) {
-    return 'Transportation';
-  }
-  if (/uber|lyft|taxi|parking|transit|metro|train|airline|flight|toll/.test(combined)) return 'Transportation';
-  if (/hotel|motel|airbnb|lodging|inn|resort/.test(combined)) return 'Lodging';
-  if (/restaurant|cafe|coffee|starbucks|mcdonald|pizza|food|diner|grill|kitchen|bar\b|brew/.test(combined)) return 'Meals';
-  if (/office|staples|supplies|paper|ink|toner/.test(combined)) return 'Office Supplies';
-  if (/movie|theater|concert|ticket|entertainment/.test(combined)) return 'Entertainment';
-  if (/airport|travel|expedia|booking/.test(combined)) return 'Travel';
-  return 'Other';
-}
-
 function parseOcrResult(text: string, confidence: number): ParsedReceipt {
   const normalized = normalizeOcrText(text);
   const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
@@ -226,7 +212,8 @@ function parseOcrResult(text: string, confidence: number): ParsedReceipt {
   const date = parseDate(normalized);
   const time = parseTime(normalized);
   const amount = parseAmountFromText(normalized);
-  const category = guessCategory(normalized, merchant);
+  const lineItem = guessLineItem(normalized, merchant);
+  const category = lineItemToCategory(lineItem);
 
   let score = confidence / 100;
   if (merchant) score += 0.1;
@@ -238,6 +225,7 @@ function parseOcrResult(text: string, confidence: number): ParsedReceipt {
     date,
     time,
     amount,
+    lineItem,
     category,
     description: merchant ? `Purchase at ${merchant}` : null,
     confidence: Math.min(score, 1),
@@ -245,12 +233,20 @@ function parseOcrResult(text: string, confidence: number): ParsedReceipt {
 }
 
 function mergeParsed(primary: ParsedReceipt, fallback: ParsedReceipt): ParsedReceipt {
+  const lineItem =
+    primary.lineItem && primary.lineItem !== DEFAULT_LINE_ITEM
+      ? primary.lineItem
+      : fallback.lineItem && fallback.lineItem !== DEFAULT_LINE_ITEM
+        ? fallback.lineItem
+        : primary.lineItem || fallback.lineItem || DEFAULT_LINE_ITEM;
+
   return {
     merchant: primary.merchant || fallback.merchant,
     date: primary.date || fallback.date,
     time: primary.time || fallback.time,
     amount: primary.amount ?? fallback.amount,
-    category: primary.category !== 'Other' ? primary.category : fallback.category,
+    lineItem,
+    category: lineItemToCategory(lineItem),
     description: primary.description || fallback.description,
     confidence: Math.max(primary.confidence, fallback.confidence),
   };
@@ -294,12 +290,14 @@ export async function parseReceiptAI(imageData: string): Promise<ParsedReceipt |
     if (!res.ok) return null;
     const data = await res.json();
     const p = data.parsed;
+    const lineItem = LINE_ITEMS.includes(p.lineItem) ? p.lineItem : guessLineItem(p.description || '', p.merchant);
     return {
       merchant: p.merchant,
       date: p.date,
       time: p.time,
       amount: p.amount,
-      category: CATEGORIES.includes(p.category) ? p.category : 'Other',
+      lineItem,
+      category: lineItemToCategory(lineItem),
       description: p.description,
       confidence: p.confidence ?? 0.9,
     };
