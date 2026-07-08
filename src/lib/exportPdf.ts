@@ -13,21 +13,45 @@ function formatRangeLabel(from: string, to: string): string {
   return `${formatDate(from)} – ${formatDate(to)}`;
 }
 
+function receiptRef(index: number): string {
+  return `R${index + 1}`;
+}
+
+function addPageNumbers(doc: import('jspdf').jsPDF) {
+  const total = doc.getNumberOfPages();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+
+  for (let i = 1; i <= total; i++) {
+    doc.setPage(i);
+    doc.setFontSize(8);
+    doc.setTextColor(120);
+    doc.text(`Page ${i} of ${total}`, pageWidth / 2, pageHeight - 8, { align: 'center' });
+  }
+}
+
 function addImagePage(
   doc: import('jspdf').jsPDF,
   imageData: string,
-  label: string
+  label: string,
+  ref: string
 ) {
   doc.addPage();
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 14;
   const maxWidth = pageWidth - margin * 2;
-  const maxHeight = pageHeight - margin * 2 - 12;
+  const maxHeight = pageHeight - margin * 2 - 20;
 
+  doc.setFontSize(12);
+  doc.setTextColor(21, 128, 61);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`Receipt ${ref}`, margin, margin);
+
+  doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
   doc.setTextColor(80);
-  doc.text(label, margin, margin);
+  doc.text(label, margin, margin + 6);
 
   const format = imageData.includes('image/png') ? 'PNG' : 'JPEG';
   try {
@@ -36,12 +60,12 @@ function addImagePage(
     const width = props.width * ratio;
     const height = props.height * ratio;
     const x = margin + (maxWidth - width) / 2;
-    const y = margin + 8;
+    const y = margin + 14;
     doc.addImage(imageData, format, x, y, width, height);
   } catch {
     doc.setFontSize(11);
     doc.setTextColor(120);
-    doc.text('Receipt image could not be embedded', margin, margin + 20);
+    doc.text('Receipt image could not be embedded', margin, margin + 24);
   }
 }
 
@@ -79,19 +103,23 @@ export async function exportExpenseReportPdf({
 
   autoTable(doc, {
     startY: y,
-    head: [['Date', 'Time', 'Line Item', 'Merchant', 'Amount']],
-    body: expenses.map((e) => [
+    head: [['Ref', 'Date', 'Time', 'Line Item', 'Merchant', 'Amount']],
+    body: expenses.map((e, i) => [
+      receiptRef(i),
       formatDate(e.date),
       e.time || '—',
       e.lineItem,
       e.merchant || '—',
       formatCurrency(e.amount),
     ]),
-    foot: [['', '', '', 'Total', formatCurrency(totals.grandTotal)]],
+    foot: [['', '', '', '', 'Total', formatCurrency(totals.grandTotal)]],
     styles: { fontSize: 9, cellPadding: 2.5 },
     headStyles: { fillColor: [22, 163, 74], textColor: 255 },
     footStyles: { fillColor: [240, 253, 244], textColor: [21, 128, 61], fontStyle: 'bold' },
-    columnStyles: { 4: { halign: 'right' } },
+    columnStyles: {
+      0: { cellWidth: 14, halign: 'center', fontStyle: 'bold' },
+      5: { halign: 'right' },
+    },
     margin: { left: margin, right: margin },
   });
 
@@ -129,10 +157,14 @@ export async function exportExpenseReportPdf({
     doc.text(lines, margin, y);
   }
 
-  for (const expense of expenses) {
-    const label = `${formatDate(expense.date)} · ${expense.merchant || 'Receipt'} · ${formatCurrency(expense.amount)}`;
-    addImagePage(doc, expense.imageData, label);
+  for (let i = 0; i < expenses.length; i++) {
+    const expense = expenses[i];
+    const ref = receiptRef(i);
+    const label = `${formatDate(expense.date)} · ${expense.lineItem} · ${expense.merchant || 'Receipt'} · ${formatCurrency(expense.amount)}`;
+    addImagePage(doc, expense.imageData, label, ref);
   }
+
+  addPageNumbers(doc);
 
   const filename = `expense-report-${dateFrom}-to-${dateTo}.pdf`;
   doc.save(filename);

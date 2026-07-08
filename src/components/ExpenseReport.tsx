@@ -220,7 +220,7 @@ export default function ExpenseReport({
           </button>
 
           <p className="text-xs text-gray-500">
-            PDF includes the summary, line-item breakdown, and a receipt image for each expense in the selected range.
+            PDF includes the summary, line-item breakdown, and receipt images keyed by Ref (R1, R2, …), with page numbers.
           </p>
 
           {exportStatus && (
