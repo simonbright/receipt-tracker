@@ -53,6 +53,39 @@ export interface ReportSettings {
   notes: string;
 }
 
+export interface Reminder {
+  id: string;
+  enabled: boolean;
+  time: string;
+  timezone: string;
+  text: string;
+  lastFiredDate: string | null;
+}
+
+export const MAX_REMINDERS = 3;
+
+export const TIMEZONE_OPTIONS = [
+  { value: 'America/New_York', label: 'Eastern (EST/EDT)' },
+  { value: 'America/Chicago', label: 'Central (CST/CDT)' },
+  { value: 'America/Denver', label: 'Mountain (MST/MDT)' },
+  { value: 'America/Los_Angeles', label: 'Pacific (PST/PDT)' },
+  { value: 'America/Phoenix', label: 'Arizona (MST)' },
+  { value: 'America/Anchorage', label: 'Alaska (AKST/AKDT)' },
+  { value: 'Pacific/Honolulu', label: 'Hawaii (HST)' },
+  { value: 'UTC', label: 'UTC' },
+] as const;
+
+export function createEmptyReminder(id: string): Reminder {
+  return {
+    id,
+    enabled: false,
+    time: '09:00',
+    timezone: 'America/New_York',
+    text: '',
+    lastFiredDate: null,
+  };
+}
+
 export function computeTotals(expenses: Expense[]): ExpenseTotals {
   const byCategory: Record<string, number> = {};
   let grandTotal = 0;

@@ -1,11 +1,14 @@
 import { useExpenses } from './hooks/useExpenses';
+import { useReminders } from './hooks/useReminders';
 import Header from './components/Header';
 import ReceiptCapture from './components/ReceiptCapture';
+import Reminders from './components/Reminders';
 import ExpenseLog from './components/ExpenseLog';
 import ExpenseReport from './components/ExpenseReport';
 
 export default function App() {
   const expenseState = useExpenses();
+  const reminderState = useReminders();
 
   return (
     <div className="min-h-screen">
@@ -15,6 +18,16 @@ export default function App() {
         <ReceiptCapture
           onAddExpense={expenseState.addExpense}
           aiAvailable={expenseState.serverStatus?.aiConfigured ?? false}
+        />
+
+        <Reminders
+          reminders={reminderState.reminders}
+          onUpdate={reminderState.updateReminder}
+          activeAlerts={reminderState.activeAlerts}
+          onDismissAlert={reminderState.dismissAlert}
+          notificationPermission={reminderState.notificationPermission}
+          onRequestPermission={reminderState.requestNotificationPermission}
+          enabledCount={reminderState.enabledCount}
         />
 
         <div className="grid lg:grid-cols-5 gap-8">

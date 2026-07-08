@@ -11,6 +11,7 @@ A web app for capturing receipts, parsing expense details, and emailing reimburs
 - **Expense log** — review, edit, or remove entries; click thumbnails to view full receipt
 - **Expense report** — running total, category breakdown with progress bars, line-item summary
 - **Email export** — sends a formatted HTML report with all receipt images attached
+- **Daily reminders** — up to 3 scheduled reminders per day with custom text and timezone (e.g. 5:00 AM EST — "Take picture of parking ticket")
 
 ## Quick Start
 
@@ -57,14 +58,14 @@ cp .env.example .env
 
 Data is stored in your browser's localStorage — it persists across sessions on the same device.
 
-## Deploy to Render (free tier)
+## Deploy to Render (always-on, low cost)
 
-This app deploys as **one Web Service** on Render's free plan — frontend and API together, $0/month.
+This app deploys as **one Web Service** on Render's Starter plan — frontend and API together, always on.
 
-### Free tier notes
+### Cost notes
 
-- Service sleeps after ~15 minutes of inactivity (first load after sleep takes ~30–60s)
-- 750 free instance-hours/month (enough for one always-on-ish service)
+- Render's free web services sleep after inactivity; use Starter to avoid sleeping
+- Starter is Render's lowest-cost always-on web service plan
 - Expense data stays in the browser (localStorage) — no database needed
 
 ### Option A — Blueprint (recommended)
@@ -86,7 +87,7 @@ Your app will be live at `https://receipt-tracker-xxxx.onrender.com`.
    - **Runtime:** Node
    - **Build Command:** `npm install --include=dev && npm run build`
    - **Start Command:** `npm start`
-   - **Plan:** Free
+   - **Plan:** Starter
 3. Add env vars from `.env.example` in the **Environment** tab
 
 ### Push to GitHub
