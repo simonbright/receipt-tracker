@@ -145,15 +145,21 @@ app.post('/api/parse-receipt', upload.single('image'), async (req, res) => {
               type: 'text',
               text: `Extract receipt information from this image. Return ONLY valid JSON with these fields:
 {
-  "merchant": "store/restaurant name",
+  "merchant": "store/restaurant name (e.g. Esso Circle K, not the address)",
   "date": "YYYY-MM-DD",
-  "time": "HH:MM AM/PM or 24h",
+  "time": "HH:MM in 24h format",
   "amount": 0.00,
   "category": "one of: Meals, Travel, Office Supplies, Transportation, Lodging, Entertainment, Other",
   "description": "brief description of purchase",
   "confidence": 0.0 to 1.0
 }
-Use null for fields you cannot determine. Amount should be the total paid.`,
+
+Rules:
+- amount must be the final total paid (e.g. "TOTAL CAD $ 31.18" -> 31.18)
+- For gas/fuel receipts (Esso, Circle K, Petro-Canada, Shell), category is Transportation
+- Parse labeled fields like DATE: and TIME: when present
+- Canadian receipts may show CAD, HST, GST — still use the total purchase amount
+- Use null for fields you cannot determine`,
             },
             {
               type: 'image_url',
