@@ -9,6 +9,8 @@ export const CARS = [
   { id: 'porsche', name: 'Porsche', src: '/logos/porsche.svg' },
   { id: 'maserati', name: 'Maserati', src: '/logos/maserati.svg' },
   { id: 'aston', name: 'Aston Martin', src: '/logos/aston-martin.svg' },
+  { id: 'corvette', name: 'Chevrolet Corvette', src: '/logos/corvette.svg' },
+  { id: 'jaguar', name: 'Jaguar', src: '/logos/jaguar.svg' },
 ] as const;
 
 export default function CarLogo() {

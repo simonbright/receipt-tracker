@@ -3,13 +3,15 @@ import { readStorage, writeStorage } from '../lib/storage';
 import {
   applyBrandPalette,
   brandIdFromIndex,
+  BRAND_IDS,
+  type BrandId,
 } from '../lib/themes';
 
 const CAR_KEY = 'receipt-tracker-car-logo';
 const DARK_MODE_KEY = 'receipt-tracker-dark-mode';
 
 function getInitialBrandIndex() {
-  return readStorage(CAR_KEY, 0) % 5;
+  return readStorage(CAR_KEY, 0) % BRAND_IDS.length;
 }
 
 function getInitialDarkMode() {
@@ -46,14 +48,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [brandId, darkMode]);
 
   const setBrandIndex = useCallback((index: number) => {
-    const normalized = ((index % 5) + 5) % 5;
+    const normalized =
+      ((index % BRAND_IDS.length) + BRAND_IDS.length) % BRAND_IDS.length;
     setBrandIndexState(normalized);
     writeStorage(CAR_KEY, normalized);
   }, []);
 
   const cycleBrand = useCallback(() => {
     setBrandIndexState((prev) => {
-      const next = (prev + 1) % 5;
+      const next = (prev + 1) % BRAND_IDS.length;
       writeStorage(CAR_KEY, next);
       return next;
     });
