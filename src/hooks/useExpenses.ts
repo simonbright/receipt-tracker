@@ -1,32 +1,42 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { Expense, ReportSettings } from '../types';
-import { computeTotals } from '../types';
+import { computeTotals, defaultReportDateRange } from '../types';
 import { readStorage, writeStorage } from '../lib/storage';
 
 const EXPENSES_KEY = 'receipt-tracker-expenses';
 const SETTINGS_KEY = 'receipt-tracker-settings';
 
-const DEFAULT_SETTINGS: ReportSettings = {
-  reportTitle: 'Expense Reimbursement Report',
-  employeeName: '',
-  recipientEmail: '',
-  ccEmail: '',
-  notes: '',
-};
+function buildDefaultSettings(expenses: Expense[]): ReportSettings {
+  const { dateFrom, dateTo } = defaultReportDateRange(expenses);
+  return {
+    reportTitle: 'Expense Reimbursement Report',
+    employeeName: '',
+    notes: '',
+    dateFrom,
+    dateTo,
+  };
+}
 
 function loadExpenses(): Expense[] {
   return readStorage<Expense[]>(EXPENSES_KEY, []);
 }
 
-function loadSettings(): ReportSettings {
+function loadSettings(expenses: Expense[]): ReportSettings {
+  const defaults = buildDefaultSettings(expenses);
   const stored = readStorage<Partial<ReportSettings> | null>(SETTINGS_KEY, null);
-  return stored ? { ...DEFAULT_SETTINGS, ...stored } : DEFAULT_SETTINGS;
+  if (!stored) return defaults;
+  return {
+    ...defaults,
+    ...stored,
+    dateFrom: stored.dateFrom || defaults.dateFrom,
+    dateTo: stored.dateTo || defaults.dateTo,
+  };
 }
 
 export function useExpenses() {
   const [expenses, setExpenses] = useState<Expense[]>(loadExpenses);
-  const [settings, setSettings] = useState<ReportSettings>(loadSettings);
-  const [serverStatus, setServerStatus] = useState<{ smtpConfigured: boolean; aiConfigured: boolean } | null>(null);
+  const [settings, setSettings] = useState<ReportSettings>(() => loadSettings(loadExpenses()));
+  const [serverStatus, setServerStatus] = useState<{ aiConfigured: boolean } | null>(null);
 
   useEffect(() => {
     writeStorage(EXPENSES_KEY, expenses);
@@ -42,8 +52,8 @@ export function useExpenses() {
         if (!r.ok) throw new Error('API unavailable');
         return r.json();
       })
-      .then(setServerStatus)
-      .catch(() => setServerStatus({ smtpConfigured: false, aiConfigured: false }));
+      .then((data) => setServerStatus({ aiConfigured: data.aiConfigured }))
+      .catch(() => setServerStatus({ aiConfigured: false }));
   }, []);
 
   const addExpense = useCallback((expense: Expense) => {

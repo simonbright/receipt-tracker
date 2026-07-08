@@ -48,9 +48,29 @@ export interface ExpenseTotals {
 export interface ReportSettings {
   reportTitle: string;
   employeeName: string;
-  recipientEmail: string;
-  ccEmail: string;
   notes: string;
+  dateFrom: string;
+  dateTo: string;
+}
+
+export function filterExpensesByDateRange(expenses: Expense[], from: string, to: string): Expense[] {
+  if (!from || !to) return expenses;
+  const [start, end] = from <= to ? [from, to] : [to, from];
+  return expenses.filter((e) => e.date >= start && e.date <= end);
+}
+
+export function defaultReportDateRange(expenses: Expense[]): { dateFrom: string; dateTo: string } {
+  const today = new Date().toISOString().slice(0, 10);
+  const monthStart = new Date();
+  monthStart.setDate(1);
+  const monthStartStr = monthStart.toISOString().slice(0, 10);
+
+  if (expenses.length === 0) {
+    return { dateFrom: monthStartStr, dateTo: today };
+  }
+
+  const dates = expenses.map((e) => e.date).sort();
+  return { dateFrom: dates[0], dateTo: dates[dates.length - 1] };
 }
 
 export interface Reminder {

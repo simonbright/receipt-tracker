@@ -1,86 +1,121 @@
-import { useState } from 'react';
-import type { Expense, ExpenseTotals, ReportSettings } from '../types';
-import { formatCurrency, formatDate } from '../types';
+import { useState, useMemo } from 'react';
+import type { Expense, ReportSettings } from '../types';
+import {
+  computeTotals,
+  filterExpensesByDateRange,
+  formatCurrency,
+  formatDate,
+} from '../types';
+import { exportExpenseReportPdf } from '../lib/exportPdf';
 
 interface ExpenseReportProps {
   expenses: Expense[];
-  totals: ExpenseTotals;
   settings: ReportSettings;
   onSettingsChange: (settings: ReportSettings) => void;
-  smtpConfigured: boolean;
 }
 
 export default function ExpenseReport({
   expenses,
-  totals,
   settings,
   onSettingsChange,
-  smtpConfigured,
 }: ExpenseReportProps) {
   const [showSettings, setShowSettings] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [emailStatus, setEmailStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportStatus, setExportStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const dateFrom = settings.dateFrom;
+  const dateTo = settings.dateTo;
+  const rangeInvalid = Boolean(dateFrom && dateTo && dateFrom > dateTo);
+
+  const filteredExpenses = useMemo(
+    () => filterExpensesByDateRange(expenses, dateFrom, dateTo),
+    [expenses, dateFrom, dateTo]
+  );
+
+  const totals = useMemo(() => computeTotals(filteredExpenses), [filteredExpenses]);
+  const sortedCategories = Object.entries(totals.byCategory).sort(([, a], [, b]) => b - a);
 
   const update = (field: keyof ReportSettings, value: string) => {
     onSettingsChange({ ...settings, [field]: value });
   };
 
-  const handleSendEmail = async () => {
-    if (!settings.recipientEmail) {
-      setEmailStatus({ type: 'error', message: 'Please set a recipient email in report settings.' });
+  const handleExportPdf = async () => {
+    if (rangeInvalid) {
+      setExportStatus({ type: 'error', message: 'From date must be on or before To date.' });
       return;
     }
-    if (expenses.length === 0) {
-      setEmailStatus({ type: 'error', message: 'Add at least one expense before sending.' });
+    if (filteredExpenses.length === 0) {
+      setExportStatus({ type: 'error', message: 'No expenses in the selected date range.' });
       return;
     }
 
-    setSending(true);
-    setEmailStatus(null);
+    setExporting(true);
+    setExportStatus(null);
 
     try {
-      const res = await fetch('/api/email-report', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to: settings.recipientEmail,
-          cc: settings.ccEmail || undefined,
-          reportTitle: settings.reportTitle,
-          employeeName: settings.employeeName,
-          expenses: expenses.map(({ imageData: _, ...rest }) => rest),
-          totals,
-          notes: settings.notes,
-          images: expenses.map((e) => ({ data: e.imageData })),
-        }),
+      await exportExpenseReportPdf({
+        expenses: filteredExpenses,
+        totals,
+        settings,
+        dateFrom,
+        dateTo,
       });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Failed to send email');
-
-      setEmailStatus({ type: 'success', message: 'Report emailed with all receipt images attached!' });
+      setExportStatus({ type: 'success', message: 'PDF downloaded with report and receipt images.' });
     } catch (err) {
-      setEmailStatus({
+      setExportStatus({
         type: 'error',
-        message: err instanceof Error ? err.message : 'Failed to send email',
+        message: err instanceof Error ? err.message : 'Failed to export PDF',
       });
     } finally {
-      setSending(false);
+      setExporting(false);
     }
   };
-
-  const sortedCategories = Object.entries(totals.byCategory).sort(([, a], [, b]) => b - a);
 
   return (
     <section className="card overflow-hidden lg:sticky lg:top-24">
       <div className="px-6 py-4 border-b border-gray-200 bg-brand-50">
         <h2 className="text-lg font-semibold text-brand-900">Expense Report</h2>
-        <p className="text-xs text-brand-700 mt-0.5">{totals.count} item{totals.count !== 1 ? 's' : ''}</p>
+        <p className="text-xs text-brand-700 mt-0.5">
+          {totals.count} item{totals.count !== 1 ? 's' : ''} in selected range
+        </p>
       </div>
 
       <div className="p-6 space-y-6">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="label">From</label>
+            <input
+              type="date"
+              className="input"
+              value={dateFrom}
+              onChange={(e) => update('dateFrom', e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="label">To</label>
+            <input
+              type="date"
+              className="input"
+              value={dateTo}
+              onChange={(e) => update('dateTo', e.target.value)}
+            />
+          </div>
+        </div>
+
+        {rangeInvalid && (
+          <p className="text-xs text-red-600 bg-red-50 rounded-lg p-3">
+            From date must be on or before To date.
+          </p>
+        )}
+
         <div className="text-center py-4 bg-gray-50 rounded-xl">
           <p className="text-sm text-gray-500 mb-1">Total Reimbursement</p>
           <p className="text-4xl font-bold text-brand-700">{formatCurrency(totals.grandTotal)}</p>
+          {dateFrom && dateTo && !rangeInvalid && (
+            <p className="text-xs text-gray-400 mt-1">
+              {formatDate(dateFrom)} – {formatDate(dateTo)}
+            </p>
+          )}
         </div>
 
         {sortedCategories.length > 0 && (
@@ -108,11 +143,11 @@ export default function ExpenseReport({
           </div>
         )}
 
-        {expenses.length > 0 && (
+        {filteredExpenses.length > 0 && (
           <div>
             <h3 className="text-sm font-semibold text-gray-700 mb-3">Line Items</h3>
             <div className="space-y-2 max-h-48 overflow-y-auto">
-              {expenses.map((e) => (
+              {filteredExpenses.map((e) => (
                 <div key={e.id} className="flex justify-between text-sm py-1.5 border-b border-gray-50 last:border-0">
                   <div className="min-w-0 pr-2">
                     <p className="font-medium text-gray-800 truncate">{e.merchant || '—'}</p>
@@ -125,6 +160,10 @@ export default function ExpenseReport({
           </div>
         )}
 
+        {filteredExpenses.length === 0 && expenses.length > 0 && !rangeInvalid && (
+          <p className="text-sm text-gray-500 text-center py-2">No expenses in this date range.</p>
+        )}
+
         <div className="border-t border-gray-200 pt-4 space-y-3">
           <button
             type="button"
@@ -134,7 +173,7 @@ export default function ExpenseReport({
             <svg className={`w-4 h-4 transition-transform ${showSettings ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
-            Report &amp; email settings
+            Report settings
           </button>
 
           {showSettings && (
@@ -148,15 +187,7 @@ export default function ExpenseReport({
                 <input className="input" value={settings.employeeName} onChange={(e) => update('employeeName', e.target.value)} placeholder="Jane Smith" />
               </div>
               <div>
-                <label className="label">Send to (approver email)</label>
-                <input type="email" className="input" value={settings.recipientEmail} onChange={(e) => update('recipientEmail', e.target.value)} placeholder="manager@company.com" />
-              </div>
-              <div>
-                <label className="label">CC (optional)</label>
-                <input type="email" className="input" value={settings.ccEmail} onChange={(e) => update('ccEmail', e.target.value)} placeholder="accounting@company.com" />
-              </div>
-              <div>
-                <label className="label">Notes for approver</label>
+                <label className="label">Notes</label>
                 <textarea
                   className="input min-h-[72px] resize-y"
                   value={settings.notes}
@@ -169,31 +200,29 @@ export default function ExpenseReport({
 
           <button
             type="button"
-            onClick={handleSendEmail}
-            disabled={sending || expenses.length === 0}
+            onClick={handleExportPdf}
+            disabled={exporting || filteredExpenses.length === 0 || rangeInvalid}
             className="btn-primary w-full"
           >
-            {sending ? (
-              <>Sending…</>
+            {exporting ? (
+              <>Generating PDF…</>
             ) : (
               <>
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                Email Report + Receipts
+                Export PDF
               </>
             )}
           </button>
 
-          {!smtpConfigured && (
-            <p className="text-xs text-amber-700 bg-amber-50 rounded-lg p-3">
-              Email requires SMTP setup. Copy <code className="font-mono">.env.example</code> to <code className="font-mono">.env</code> and add your mail credentials.
-            </p>
-          )}
+          <p className="text-xs text-gray-500">
+            PDF includes the summary, category breakdown, and a receipt image for each expense in the selected range.
+          </p>
 
-          {emailStatus && (
-            <p className={`text-sm rounded-lg p-3 ${emailStatus.type === 'success' ? 'bg-brand-50 text-brand-800' : 'bg-red-50 text-red-700'}`}>
-              {emailStatus.message}
+          {exportStatus && (
+            <p className={`text-sm rounded-lg p-3 ${exportStatus.type === 'success' ? 'bg-brand-50 text-brand-800' : 'bg-red-50 text-red-700'}`}>
+              {exportStatus.message}
             </p>
           )}
         </div>

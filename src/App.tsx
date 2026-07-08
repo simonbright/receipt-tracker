@@ -51,10 +51,8 @@ export default function App() {
           <div className="lg:col-span-2">
             <ExpenseReport
               expenses={expenseState.expenses}
-              totals={expenseState.totals}
               settings={expenseState.settings}
               onSettingsChange={expenseState.setSettings}
-              smtpConfigured={expenseState.serverStatus?.smtpConfigured ?? false}
             />
           </div>
         </div>

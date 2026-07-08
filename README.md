@@ -10,7 +10,7 @@ A web app for capturing receipts, parsing expense details, and emailing reimburs
   - Optional AI parsing (OpenAI GPT-4o-mini) when `OPENAI_API_KEY` is set
 - **Expense log** — review, edit, or remove entries; click thumbnails to view full receipt
 - **Expense report** — running total, category breakdown with progress bars, line-item summary
-- **Email export** — sends a formatted HTML report with all receipt images attached
+- **PDF export** — download a reimbursement report for a selected date range, with receipt images attached in the PDF
 - **Daily reminders** — up to 3 scheduled reminders per day with custom text and timezone (e.g. 5:00 AM EST — "Take picture of parking ticket")
 
 ## Quick Start
@@ -53,8 +53,8 @@ cp .env.example .env
 1. Click **Take Photo** or **Upload Image** to add a receipt
 2. Review the auto-filled fields and click **Add to Expense Log**
 3. Repeat for all receipts
-4. Fill in report settings (your name, approver email)
-5. Click **Email Report + Receipts** to send everything for reimbursement
+4. Set the **From** and **To** dates for your report
+5. Click **Export PDF** to download the summary and receipt images for that period
 
 Data is stored in your browser's localStorage — it persists across sessions on the same device.
 

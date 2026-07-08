@@ -1,5 +1,5 @@
 interface HeaderProps {
-  serverStatus: { smtpConfigured: boolean; aiConfigured: boolean } | null;
+  serverStatus: { aiConfigured: boolean } | null;
   expenseCount: number;
 }
 
@@ -21,28 +21,12 @@ export default function Header({ serverStatus, expenseCount }: HeaderProps) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-xs">
-          {serverStatus && (
-            <>
-              <StatusBadge label="AI Parsing" active={serverStatus.aiConfigured} />
-              <StatusBadge label="Email" active={serverStatus.smtpConfigured} />
-            </>
-          )}
-        </div>
+        {serverStatus?.aiConfigured && (
+          <span className="text-xs text-brand-700 bg-brand-50 px-2.5 py-1 rounded-full font-medium">
+            AI parsing enabled
+          </span>
+        )}
       </div>
     </header>
-  );
-}
-
-function StatusBadge({ label, active }: { label: string; active: boolean }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-medium ${
-        active ? 'bg-brand-50 text-brand-700' : 'bg-gray-100 text-gray-500'
-      }`}
-    >
-      <span className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-brand-500' : 'bg-gray-400'}`} />
-      {label}
-    </span>
   );
 }
