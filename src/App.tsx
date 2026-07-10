@@ -1,19 +1,16 @@
 import { useCallback } from 'react';
 import { useExpenses } from './hooks/useExpenses';
-import { useReminders } from './hooks/useReminders';
 import { useAutoSync } from './hooks/useAutoSync';
 import { hasPendingSync } from './lib/syncClient';
 import type { SyncPayload } from './lib/syncClient';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import ReceiptCapture from './components/ReceiptCapture';
-import Reminders from './components/Reminders';
 import ExpenseLog from './components/ExpenseLog';
 import ExpenseReport from './components/ExpenseReport';
 
 export default function App() {
   const expenseState = useExpenses();
-  const reminderState = useReminders();
 
   const onApplyRemote = useCallback(
     (payload: SyncPayload) => {
@@ -21,12 +18,8 @@ export default function App() {
         expenses: payload.expenses,
         settings: payload.settings,
       });
-      reminderState.hydrateFromSync({
-        reminders: payload.reminders,
-        pushEnabled: payload.pushEnabled,
-      });
     },
-    [expenseState.hydrateFromSync, reminderState.hydrateFromSync]
+    [expenseState.hydrateFromSync]
   );
 
   const syncEnabled =
@@ -35,8 +28,8 @@ export default function App() {
   const { syncStatus } = useAutoSync({
     expenses: expenseState.expenses,
     settings: expenseState.settings,
-    reminders: reminderState.reminders,
-    pushEnabled: reminderState.pushEnabled,
+    reminders: [],
+    pushEnabled: false,
     syncEnabled,
     onApplyRemote,
   });
@@ -49,18 +42,6 @@ export default function App() {
         <ReceiptCapture
           onAddExpense={expenseState.addExpense}
           aiAvailable={expenseState.serverStatus?.aiConfigured ?? false}
-        />
-
-        <Reminders
-          reminders={reminderState.reminders}
-          onUpdate={reminderState.updateReminder}
-          notificationPermission={reminderState.notificationPermission}
-          onRequestPermission={reminderState.requestNotificationPermission}
-          enabledCount={reminderState.enabledCount}
-          pushEnabled={reminderState.pushEnabled}
-          pushError={reminderState.pushError}
-          pushConfigured={reminderState.pushConfigured}
-          needsHomeScreen={reminderState.needsHomeScreen}
         />
 
         <div className="grid lg:grid-cols-5 gap-8">

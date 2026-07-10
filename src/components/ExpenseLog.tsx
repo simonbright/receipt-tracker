@@ -367,15 +367,34 @@ export default function ExpenseLog({
 
       {previewImage && (
         <div
-          className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
-          onClick={() => setPreviewImage(null)}
+          className="fixed inset-0 bg-black/80 z-50 flex flex-col"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Receipt preview"
         >
-          <img
-            src={previewImage}
-            alt="Receipt full size"
-            className="max-w-full max-h-full rounded-lg shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          />
+          <div className="flex items-center justify-between gap-3 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3">
+            <p className="text-sm font-medium text-white/90">Receipt preview</p>
+            <button
+              type="button"
+              onClick={() => setPreviewImage(null)}
+              className="min-h-11 min-w-11 inline-flex items-center justify-center rounded-full bg-white text-gray-900 text-sm font-semibold px-4 shadow-lg"
+              aria-label="Close receipt preview"
+            >
+              Close
+            </button>
+          </div>
+          <button
+            type="button"
+            className="flex-1 flex items-center justify-center p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+            onClick={() => setPreviewImage(null)}
+            aria-label="Close receipt preview"
+          >
+            <img
+              src={previewImage}
+              alt="Receipt full size"
+              className="max-w-full max-h-[calc(100dvh-6rem)] rounded-lg shadow-2xl pointer-events-none"
+            />
+          </button>
         </div>
       )}
     </>

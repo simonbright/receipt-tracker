@@ -23,6 +23,7 @@ export default function ExpenseReport({
   settings,
   onSettingsChange,
 }: ExpenseReportProps) {
+  const [expanded, setExpanded] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportStatus, setExportStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -118,13 +119,31 @@ export default function ExpenseReport({
 
   return (
     <section className="card overflow-hidden lg:sticky lg:top-24">
-      <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-brand-50 dark:bg-brand-950">
-        <h2 className="text-lg font-semibold text-brand-900 dark:text-brand-100">Expense Report</h2>
-        <p className="text-xs text-brand-700 dark:text-brand-300 mt-0.5">
-          {totals.count} item{totals.count !== 1 ? 's' : ''} in selected filters
-        </p>
-      </div>
+      <button
+        type="button"
+        onClick={() => setExpanded((prev) => !prev)}
+        className="w-full px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-brand-50 dark:bg-brand-950 text-left flex items-center justify-between gap-3"
+        aria-expanded={expanded}
+      >
+        <div className="min-w-0">
+          <h2 className="text-lg font-semibold text-brand-900 dark:text-brand-100">Expense Report</h2>
+          <p className="text-xs text-brand-700 dark:text-brand-300 mt-0.5">
+            {totals.count} item{totals.count !== 1 ? 's' : ''} · {formatCurrency(totals.grandTotal)}
+            {!expanded && ' · tap to expand'}
+          </p>
+        </div>
+        <svg
+          className={`w-5 h-5 text-brand-700 dark:text-brand-300 flex-shrink-0 transition-transform ${expanded ? 'rotate-90' : ''}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          aria-hidden
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+      </button>
 
+      {expanded && (
       <div className="p-6 space-y-6">
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -328,6 +347,7 @@ export default function ExpenseReport({
           )}
         </div>
       </div>
+      )}
     </section>
   );
 }
